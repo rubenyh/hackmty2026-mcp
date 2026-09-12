@@ -31,6 +31,8 @@ src/
       health.py       Sanitized database readiness check
       schema.py       Allowlisted object discovery and description
       select.py       Structured bounded selection
+scripts/
+  seed_demo_data.py  Idempotent demo-data seeder (writes via service-role key, bypasses RLS)
 .env.example        Placeholder-only server configuration
 README.md           Operator and client-facing usage
 AGENTS.md           Coding-agent contribution rules
@@ -39,7 +41,13 @@ Dockerfile          Container definition
 uv.lock             Locked dependency graph
 ```
 
-No `app_agent/`, `tests/`, or `sql/` directory is present in the current repository tree. Hatch packages `src/supabase_mcp/`, and the installed `supabase-mcp` command calls `supabase_mcp.server:main`.
+No `app_agent/` or `tests/` directory is present in the current repository tree. Hatch packages `src/supabase_mcp/`, and the installed `supabase-mcp` command calls `supabase_mcp.server:main`.
+
+## Demo schema and seed data
+
+`scripts/seed_demo_data.py` is a standalone utility, outside the `supabase_mcp` package, that populates five allowlisted demo tables (`users`, `accessibility_preferences`, `accounts`, `transactions`, `subscriptions`) created by the `create_demo_banking_schema` migration. Every table has row-level security enabled; `mcp_reader` (see below) can only `SELECT`. The script authenticates with the Supabase service-role key, which bypasses RLS, and is idempotent: every row uses a UUID derived deterministically from a stable slug (`uuid5`), so re-running it upserts instead of duplicating. It requires the `seed` extra (`pip install -e ".[seed]"`) and reads `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` from `.env` — neither variable is read by the MCP server itself.
+
+The `mcp_reader` Postgres role is a dedicated, `SELECT`-only login (via per-table RLS policies scoped to that role) created directly in Supabase, separate from this repository's tracked migrations. `SUPABASE_DATABASE_URL` uses the session pooler (`aws-0-ca-central-1.pooler.supabase.com:5432`, username `mcp_reader.<project_ref>`) rather than the direct `db.<ref>.supabase.co` host, which is IPv6-only and fails to resolve on IPv4-only networks.
 
 ## Configuration boundary
 
@@ -126,6 +134,7 @@ A server startup check is an integration check because a non-empty allowlist is 
 - **2026-09-09:** Created a constrained read-only FastMCP/Supabase service.
 - **2026-09-11:** Documented the repository as the MCP-only implementation present in the tree and removed stale agent/provider, UI, test-suite, SQL-script, and `src/`-layout claims from the documentation and example environment.
 - **2026-09-11:** Aligned Hatchling, imports, documentation, and static analysis with the `src/supabase_mcp` package layout while preserving the `supabase-mcp` entry point.
+- **2026-09-11:** Added the demo banking schema (`users`, `accessibility_preferences`, `accounts`, `transactions`, `subscriptions`) with RLS, a dedicated `mcp_reader` role, and `scripts/seed_demo_data.py` for the initial FluidBank orchestrator integration.
 
 ## Documentation maintenance
 

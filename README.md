@@ -44,6 +44,29 @@ MCP_ALLOWED_TABLES=public.customers,public.accounts,public.transactions
 
 For the Supabase session pooler, use its connection parameters. Both `postgresql://` and `postgresql+psycopg://` are accepted. Percent-encode special characters in usernames and passwords.
 
+The direct `db.PROJECT_REF.supabase.co` host is IPv6-only and fails to resolve on IPv4-only
+networks (`failed to resolve host`). If that happens, switch to the session pooler instead,
+with the project ref appended to the username:
+
+```env
+SUPABASE_DATABASE_URL=postgresql+psycopg://mcp_reader.PROJECT_REF:REPLACE_WITH_PASSWORD@aws-0-REGION.pooler.supabase.com:5432/postgres?sslmode=require
+```
+
+## Demo data
+
+`scripts/seed_demo_data.py` seeds the demo banking schema (`users`, `accessibility_preferences`,
+`accounts`, `transactions`, `subscriptions`) for local development. It writes through the
+Supabase service-role key (bypassing RLS) and is safe to re-run — every row uses a UUID
+derived deterministically from a stable slug, so re-seeding upserts instead of duplicating:
+
+```bash
+pip install -e ".[seed]"
+python scripts/seed_demo_data.py
+```
+
+It reads `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` from `.env`; the MCP server itself never
+reads these two variables.
+
 All supported settings and defaults are documented in [`.env.example`](.env.example). The service has no `LLM_*`, `OPENAI_*`, or `AGENT_*` settings.
 
 ## Run
