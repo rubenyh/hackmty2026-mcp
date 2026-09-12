@@ -58,8 +58,8 @@ uv run python -m supabase_mcp.server
 
 MCP Inspector:
 
-```powershell
-npx -y @modelcontextprotocol/inspector uv run python -m supabase_mcp.server
+```bash
+uv run fastmcp dev inspector src/supabase_mcp/server.py:mcp --project .
 ```
 
 Streamable HTTP:
@@ -87,8 +87,8 @@ On Windows, start the module as shown above. `supabase_mcp.server` selects the e
 These checks do not require a live database:
 
 ```powershell
-uv run ruff format --check supabase_mcp
-uv run ruff check supabase_mcp
+uv run ruff format --check src/supabase_mcp
+uv run ruff check src/supabase_mcp
 uv run mypy
 uv run python -c "from supabase_mcp.config import Settings; print('import ok')"
 ```

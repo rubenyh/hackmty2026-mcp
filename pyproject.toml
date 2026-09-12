@@ -19,7 +19,7 @@ dependencies = [
 supabase-mcp = "supabase_mcp.server:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["supabase_mcp"]
+packages = ["src/supabase_mcp"]
 
 [dependency-groups]
 dev = [
@@ -45,4 +45,4 @@ select = ["E", "F", "I", "UP", "B", "ASYNC", "RUF"]
 [tool.mypy]
 python_version = "3.11"
 strict = true
-files = ["supabase_mcp"]
+files = ["src/supabase_mcp"]

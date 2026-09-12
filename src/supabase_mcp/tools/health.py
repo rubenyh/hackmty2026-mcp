@@ -6,8 +6,8 @@ import logging
 
 from fastmcp import Context
 
-from mcp.src.supabase_mcp.database import DatabaseClient
-from mcp.src.supabase_mcp.models import HealthResult, PublicError
+from supabase_mcp.database import DatabaseClient
+from supabase_mcp.models import HealthResult, PublicError
 
 logger = logging.getLogger(__name__)
 

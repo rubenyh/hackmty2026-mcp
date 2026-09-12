@@ -52,13 +52,13 @@ Update `.env.example`, `README.md`, and `ARCHITECTURE.md` when configuration or 
 
 ## Working commands
 
-The package and its installation metadata both use the repository-root `supabase_mcp/` layout:
+The package uses the `src/supabase_mcp/` layout, and Hatchling installs it as `supabase_mcp`:
 
 ```powershell
 uv sync
 uv run supabase-mcp
-uv run ruff format --check supabase_mcp
-uv run ruff check supabase_mcp
+uv run ruff format --check src/supabase_mcp
+uv run ruff check src/supabase_mcp
 uv run mypy
 ```
 

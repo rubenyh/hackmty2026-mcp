@@ -6,9 +6,9 @@ import logging
 
 from fastmcp import Context
 
-from mcp.src.supabase_mcp.errors import InvalidSelectionError
-from mcp.src.supabase_mcp.models import AllowedTablesResult, DescribeTableResult, PublicError
-from mcp.src.supabase_mcp.tools.health import _database
+from supabase_mcp.errors import InvalidSelectionError
+from supabase_mcp.models import AllowedTablesResult, DescribeTableResult, PublicError
+from supabase_mcp.tools.health import _database
 
 logger = logging.getLogger(__name__)
 

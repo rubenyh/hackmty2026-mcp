@@ -15,9 +15,9 @@ from typing import Any
 from fastmcp import FastMCP
 from fastmcp.server.lifespan import lifespan
 
-from mcp.src.supabase_mcp.config import Settings
-from mcp.src.supabase_mcp.database import DatabaseClient
-from mcp.src.supabase_mcp.tools import describe_table, health_check, list_allowed_tables, select_rows
+from supabase_mcp.config import Settings
+from supabase_mcp.database import DatabaseClient
+from supabase_mcp.tools import describe_table, health_check, list_allowed_tables, select_rows
 
 
 def load_settings() -> Settings:

@@ -11,9 +11,9 @@ from sqlalchemy import MetaData, Select, Table, asc, desc, inspect, select, text
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, create_async_engine
 
-from mcp.src.supabase_mcp.config import Settings
-from mcp.src.supabase_mcp.errors import DatabaseConfigurationError, InvalidSelectionError
-from mcp.src.supabase_mcp.models import (
+from supabase_mcp.config import Settings
+from supabase_mcp.errors import DatabaseConfigurationError, InvalidSelectionError
+from supabase_mcp.models import (
     AllowedObject,
     ColumnDescription,
     FilterCondition,
@@ -21,7 +21,7 @@ from mcp.src.supabase_mcp.models import (
     OrderDirection,
     SelectRequest,
 )
-from mcp.src.supabase_mcp.serialization import serialize_row
+from supabase_mcp.serialization import serialize_row
 
 logger = logging.getLogger(__name__)
 

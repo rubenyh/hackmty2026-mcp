@@ -18,18 +18,19 @@ The server supports stdio and Streamable HTTP. Stdio is the default and is suita
 ## Repository map
 
 ```text
-supabase_mcp/
-  __init__.py       Package marker
-  config.py         Environment parsing, normalization, and validation
-  database.py       Engine lifecycle, reflection, query construction, and execution
-  errors.py         Internal safe error types
-  models.py         Strict tool inputs and structured results
-  serialization.py  PostgreSQL-to-JSON-safe conversion
-  server.py         Event-loop setup, FastMCP lifespan, registration, and entry point
-  tools/
-    health.py       Sanitized database readiness check
-    schema.py       Allowlisted object discovery and description
-    select.py       Structured bounded selection
+src/
+  supabase_mcp/
+    __init__.py       Package marker
+    config.py         Environment parsing, normalization, and validation
+    database.py       Engine lifecycle, reflection, query construction, and execution
+    errors.py         Internal safe error types
+    models.py         Strict tool inputs and structured results
+    serialization.py  PostgreSQL-to-JSON-safe conversion
+    server.py         Event-loop setup, FastMCP lifespan, registration, and entry point
+    tools/
+      health.py       Sanitized database readiness check
+      schema.py       Allowlisted object discovery and description
+      select.py       Structured bounded selection
 .env.example        Placeholder-only server configuration
 README.md           Operator and client-facing usage
 AGENTS.md           Coding-agent contribution rules
@@ -38,7 +39,7 @@ Dockerfile          Container definition
 uv.lock             Locked dependency graph
 ```
 
-No `src/`, `app_agent/`, `tests/`, or `sql/` directory is present in the current repository tree. Hatch packages the root-level `supabase_mcp/` directory, and the installed `supabase-mcp` command calls `supabase_mcp.server:main`.
+No `app_agent/`, `tests/`, or `sql/` directory is present in the current repository tree. Hatch packages `src/supabase_mcp/`, and the installed `supabase-mcp` command calls `supabase_mcp.server:main`.
 
 ## Configuration boundary
 
@@ -108,12 +109,12 @@ Explicit non-goals are writes, arbitrary SQL, schema mutation, authentication, m
 
 ## Operational checks
 
-Static validation is scoped directly to the root package:
+Static validation is scoped directly to the source package:
 
 ```powershell
 uv sync
-uv run ruff format --check supabase_mcp
-uv run ruff check supabase_mcp
+uv run ruff format --check src/supabase_mcp
+uv run ruff check src/supabase_mcp
 uv run mypy
 uv run python -c "from supabase_mcp.config import Settings; print('import ok')"
 ```
@@ -124,7 +125,7 @@ A server startup check is an integration check because a non-empty allowlist is 
 
 - **2026-09-09:** Created a constrained read-only FastMCP/Supabase service.
 - **2026-09-11:** Documented the repository as the MCP-only implementation present in the tree and removed stale agent/provider, UI, test-suite, SQL-script, and `src/`-layout claims from the documentation and example environment.
-- **2026-09-11:** Aligned project metadata with the root-level MCP package, removed the obsolete agent dependency and console entry point, and scoped static analysis to `supabase_mcp`.
+- **2026-09-11:** Aligned Hatchling, imports, documentation, and static analysis with the `src/supabase_mcp` package layout while preserving the `supabase-mcp` entry point.
 
 ## Documentation maintenance
 
