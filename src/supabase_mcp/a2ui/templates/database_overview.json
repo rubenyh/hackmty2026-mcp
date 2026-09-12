@@ -1,0 +1,66 @@
+[
+  {
+    "version": "v0.9.1",
+    "createSurface": {
+      "surfaceId": "database-overview",
+      "catalogId": "https://a2ui.org/specification/v0_9_1/catalogs/basic/catalog.json"
+    }
+  },
+  {
+    "version": "v0.9.1",
+    "updateComponents": {
+      "surfaceId": "database-overview",
+      "components": [
+        {
+          "id": "root",
+          "component": "Card",
+          "child": "overview_column"
+        },
+        {
+          "id": "overview_column",
+          "component": "Column",
+          "children": [
+            "overview_title",
+            "overview_summary",
+            "overview_objects",
+            "refresh_button"
+          ]
+        },
+        {
+          "id": "overview_title",
+          "component": "Text",
+          "text": {"path": "/title"},
+          "variant": "h2"
+        },
+        {
+          "id": "overview_summary",
+          "component": "Text",
+          "text": {"path": "/summary"}
+        },
+        {
+          "id": "overview_objects",
+          "component": "Text",
+          "text": {"path": "/objectsText"}
+        },
+        {
+          "id": "refresh_button_label",
+          "component": "Text",
+          "text": "Refresh"
+        },
+        {
+          "id": "refresh_button",
+          "component": "Button",
+          "child": "refresh_button_label",
+          "action": {
+            "event": {
+              "name": "refresh_database_overview",
+              "context": {
+                "limit": {"path": "/limit"}
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+]
