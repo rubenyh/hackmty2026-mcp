@@ -61,7 +61,10 @@ class DatabaseClient:
                         reflected = await connection.run_sync(self._reflect_allowlist)
                 self._objects = reflected
         except Exception as exc:
-            logger.exception("Database allowlist validation failed while starting DatabaseClient")
+            logger.warning(
+                "Database allowlist validation failed while starting DatabaseClient (%s)",
+                type(exc).__name__,
+            )
             await self.stop()
             raise DatabaseConfigurationError(
                 "Could not validate MCP_ALLOWED_TABLES. Confirm object names, "

@@ -114,6 +114,8 @@ Every database operation opens a transaction and executes:
 
 These application controls complement, rather than replace, database controls. Deployments must use a dedicated login with only `CONNECT`, schema `USAGE`, explicit `SELECT`, and suitable Row Level Security policies. The role must not own protected tables, have `BYPASSRLS`, or use Supabase administrative/service-role credentials.
 
+Startup failures are logged only by bounded operation name and exception class. Exception text and stack traces are intentionally excluded so connection and SQL details cannot escape through platform logs.
+
 ## Query construction
 
 Clients cannot provide SQL. A `SelectRequest` names a reflected schema/object, optional reflected columns, typed filters, typed ordering, an optional limit, and a non-negative offset. Pydantic models forbid unknown fields.
@@ -130,6 +132,8 @@ The effective limit is the request limit or `MCP_DEFAULT_LIMIT` and cannot excee
 - `select_rows` returns JSON-safe rows, count, effective pagination values, and truncation state.
 
 Known request failures use stable public codes such as `object_not_allowed`, `column_not_allowed`, `limit_exceeded`, and `invalid_request`. Unexpected failures are reduced to sanitized `server_error`, `database_error`, or `database_unavailable` results. Logs record an operation label and exception class, not credentials or row bodies.
+
+Visualization query failures raised by the database driver use the actionable, sanitized `database_error` result rather than falling through to a generic server failure. Protocol responses never include driver text, SQL statements, connection details, or stack traces.
 
 Serialization preserves primitive JSON values, stringifies UUIDs and decimals, emits ISO-8601 date/time strings, converts enums through their values, Base64-encodes bytes, and recursively handles mappings and sequences. Unknown values fall back to strings.
 
@@ -198,6 +202,7 @@ The offline tests use FastMCP's in-memory client and an empty deny-all allowlist
 - **2026-09-11:** Aligned Hatchling, imports, documentation, and static analysis with the `src/supabase_mcp` package layout while preserving the `supabase-mcp` entry point.
 - **2026-09-11:** Added compositional A2UI v0.9.1 support for a bounded database overview, including a packaged resource template, SDK-backed validation, reusable response factory, explicit read-only action registry, safe error acknowledgements, protocol tests, and non-A2UI fallbacks.
 - **2026-09-12:** Made the file-based Horizon entrypoint import-safe by removing the internal/external `a2ui` package-name collision, constrained sdist contents, and added package-import and `fastmcp inspect` regressions that run without runtime secrets.
+- **2026-09-12:** Added explicit protocol assertions that both A2UI resources are UTF-8 textual JSON validated by the registered v0.9.1 catalogs, checked every exposed input schema for JSON serialization, and removed startup stack-trace logging.
 
 ## Documentation maintenance
 

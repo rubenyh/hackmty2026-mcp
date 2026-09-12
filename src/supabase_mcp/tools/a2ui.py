@@ -9,6 +9,7 @@ from fastmcp import Context
 from fastmcp.tools import ToolResult
 from mcp.types import TextContent
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import SQLAlchemyError
 
 from supabase_mcp.a2ui_support.actions import (
     ActionDispatchError,
@@ -121,6 +122,17 @@ async def visualize_allowed_data(
             structured_content={
                 "ok": False,
                 "error": {"code": exc.code, "message": exc.safe_message},
+            },
+            is_error=True,
+        )
+    except SQLAlchemyError as exc:
+        logger.warning("Allowed data visualization database failure (%s)", type(exc).__name__)
+        message = "The database request could not be completed."
+        return ToolResult(
+            content=[TextContent(text=message)],
+            structured_content={
+                "ok": False,
+                "error": {"code": "database_error", "message": message},
             },
             is_error=True,
         )

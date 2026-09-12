@@ -7,10 +7,12 @@ import json
 import pytest
 from fastmcp import Client
 from mcp.types import EmbeddedResource, TextContent, TextResourceContents
+from sqlalchemy.exc import SQLAlchemyError
 
 import supabase_mcp.tools.a2ui as a2ui_tools
 from supabase_mcp.a2ui_support.constants import A2UI_MIME_TYPE
 from supabase_mcp.a2ui_support.surfaces import DATA_CHART_SURFACE, DATABASE_OVERVIEW_SURFACE
+from supabase_mcp.a2ui_support.validation import A2UIValidator
 from supabase_mcp.models import VisualizeAllowedDataResult
 from supabase_mcp.server import mcp
 
@@ -31,15 +33,24 @@ async def test_a2ui_resource_and_tool_protocol(monkeypatch: pytest.MonkeyPatch) 
 
         contents = await client.read_resource(DATABASE_OVERVIEW_SURFACE.resource_uri)
         assert len(contents) == 1
+        assert isinstance(contents[0], TextResourceContents)
         assert contents[0].mime_type == A2UI_MIME_TYPE
         template = json.loads(contents[0].text)
+        A2UIValidator().validate_template(template, DATABASE_OVERVIEW_SURFACE)
         assert "createSurface" in template[0]
 
         chart_contents = await client.read_resource(DATA_CHART_SURFACE.resource_uri)
+        assert len(chart_contents) == 1
+        assert isinstance(chart_contents[0], TextResourceContents)
         chart_template = json.loads(chart_contents[0].text)
+        A2UIValidator().validate_template(chart_template, DATA_CHART_SURFACE)
         assert chart_template[0]["createSurface"]["catalogId"] == DATA_CHART_SURFACE.catalog_id
 
         tools = await client.list_tools()
+        assert len(tools) == 8
+        for listed_tool in tools:
+            json.dumps(listed_tool.input_schema, allow_nan=False)
+            assert listed_tool.input_schema.get("additionalProperties") is False
         tool = next(item for item in tools if item.name == "database_overview")
         assert tool.meta is not None
         assert tool.meta["ui"] == {
@@ -145,3 +156,31 @@ async def test_a2ui_resource_and_tool_protocol(monkeypatch: pytest.MonkeyPatch) 
         chart_dynamic = json.loads(chart_embedded.resource.text)
         assert len(chart_dynamic) == 1
         assert set(chart_dynamic[0]) == {"version", "updateDataModel"}
+
+        async def failing_chart(_database: object, _request: object) -> VisualizeAllowedDataResult:
+            raise SQLAlchemyError("private SQL detail")
+
+        monkeypatch.setattr(a2ui_tools, "get_data_chart", failing_chart)
+        failed_chart = await client.call_tool(
+            "visualize_allowed_data",
+            {
+                "request": {
+                    "source": {"schema": "public", "table": "cashflow"},
+                    "visualization": {
+                        "kind": "area",
+                        "x_column": "month",
+                        "y_columns": ["income"],
+                    },
+                }
+            },
+            raise_on_error=False,
+        )
+        assert failed_chart.is_error is True
+        assert failed_chart.structured_content == {
+            "ok": False,
+            "error": {
+                "code": "database_error",
+                "message": "The database request could not be completed.",
+            },
+        }
+        assert "private SQL detail" not in str(failed_chart)
