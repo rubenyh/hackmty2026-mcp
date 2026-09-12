@@ -86,7 +86,7 @@ Unqualified allowlist entries are accepted only when exactly one schema is confi
 
 `supabase_mcp.server` selects `WindowsSelectorEventLoopPolicy` on Windows before importing FastMCP or database modules. This ordering is required by Psycopg's async implementation.
 
-FastMCP's lifespan creates one shared `DatabaseClient`, starts it before serving requests, makes it available through the tool context, and disposes it during shutdown. The module preserves the four original tools (`health_check`, `list_allowed_tables`, `describe_table`, and `select_rows`) and adds `database_overview`, `a2ui_action`, and `a2ui_error`. It also publishes the database-overview presentation template as a read-only resource.
+FastMCP's lifespan creates one shared `DatabaseClient`, starts it before serving requests, makes it available through the tool context, and disposes it during shutdown. The module preserves the four original tools (`health_check`, `list_allowed_tables`, `describe_table`, and `select_rows`) and adds `database_overview`, `visualize_allowed_data`, `a2ui_action`, and `a2ui_error`. It publishes both A2UI presentation templates as read-only resources.
 
 `main()` selects stdio unless `MCP_TRANSPORT=http`. HTTP uses the configured host and port; FastMCP exposes its MCP endpoint at `/mcp`. The service itself adds no authentication, authorization middleware, reverse-proxy TLS, rate limiting, or tenant isolation.
 
@@ -96,7 +96,7 @@ The internal A2UI integration package is named `a2ui_support`, rather than `a2ui
 
 ## Packaging and Horizon deployment
 
-Hatchling builds the `src/supabase_mcp` package into the wheel, including the static A2UI JSON template. Runtime imports use the installed `supabase_mcp` package and do not depend on a manually configured `PYTHONPATH`. Python 3.12 satisfies the declared `>=3.11` requirement. Runtime libraries imported by the package are declared in `[project.dependencies]`; test and build tooling remains in the development dependency group.
+Hatchling builds the `src/supabase_mcp` package into the wheel, including both static A2UI templates and the packaged Finance Catalog JSON. Runtime imports use the installed `supabase_mcp` package and do not depend on a manually configured `PYTHONPATH`. Python 3.12 satisfies the declared `>=3.11` requirement. Runtime libraries imported by the package are declared in `[project.dependencies]`; test and build tooling remains in the development dependency group.
 
 The sdist target uses an explicit source allowlist. This prevents local virtual environments, build directories, `.env`, caches, and other untracked workstation files from being copied into release artifacts. Horizon generates its own runtime image from `pyproject.toml`, so the repository `Dockerfile` is not part of this deployment path and remains unchanged.
 
@@ -135,13 +135,21 @@ Serialization preserves primitive JSON values, stringifies UUIDs and decimals, e
 
 ## A2UI presentation boundary
 
-A2UI is an optional presentation layer over MCP, not a database or authorization layer. Only `database_overview` currently uses it. Normal MCP tools continue returning their existing typed results without inheriting from an A2UI base class.
+A2UI is an optional presentation layer over MCP, not a database or authorization layer. `database_overview` and `visualize_allowed_data` use it. Normal MCP tools continue returning their existing typed results without inheriting from an A2UI base class.
 
-`SurfaceRegistry` owns the stable mapping from surface ID to resource URI and packaged JSON template. Registration loads templates with `importlib.resources`, rejects duplicate surface IDs and resource URIs, rejects missing or malformed templates, checks the `v0.9.1` version and `v0_9_1` Basic Catalog identifier, verifies the surface ID, ordering, unique component IDs, and `root`, and runs the official `a2ui-agent-sdk` validator. The validated serialized template is cached and served at `a2ui://database/overview` without consulting PostgreSQL.
+`CatalogRegistry` loads and caches the Basic and packaged Finance v1 schemas with `importlib.resources`, rejecting duplicate/unknown IDs or malformed catalogs at import. `SurfaceRegistry` maps each surface ID and resource URI to exactly one catalog and template. Registration rejects duplicates or malformed templates, verifies v0.9.1, catalog/surface identity, ordering, unique component IDs, and `root`, then runs the matching official SDK validator. Validated serialized templates are served without consulting PostgreSQL.
 
 `database_overview` calls a bounded domain service over `DatabaseClient.list_allowed_objects()`. The domain result has no A2UI dependency. A pure mapper produces a small data model for the template. `A2UIResponseFactory` converts it to a validated `updateDataModel` with `path: "/"`, adds a text fallback, preserves a detached JSON-safe domain result in `structuredContent`, embeds the A2UI update using `application/a2ui+json` and `Annotations(audience=["user"])`, and adds the same `_meta.ui` resource link used in the static tool definition. It can also update a validated absolute JSON Pointer without rebuilding the layout.
 
 The static template contains only `createSurface` and `updateComponents`. It binds text and action context to the dynamic model and contains no database values. The dynamic tool response contains only `updateDataModel`; clients may cache the static template independently.
+
+### Finance chart surface
+
+`CatalogRegistry` allowlists and caches the Basic and Finance v1 validators, rejects duplicate or unknown IDs, and fails import on malformed packaged schemas. Every `SurfaceSpec` declares exactly one catalog. `database_overview.json` remains unchanged on Basic and is not a component registry. `data_chart.json` is a separate static surface at `a2ui://finance/data-chart`; Finance v1 exposes only `Text`, `Button`, `Card`, `Column`, and `Chart`.
+
+`visualize_allowed_data` accepts a strict source/filter/order/limit request plus an `area` or `heatmap` column mapping. It resolves only reflected allowlisted identifiers, reuses parameterized `SelectRequest` queries, fetches only required columns, verifies value columns are numeric, applies deterministic ordering, and caps raw rows at 240 for area or 500 for heatmap. Rows with null required values are omitted and counted; malformed dates, duplicate labels/dates, non-finite values, and values outside the chart range fail with safe errors. Its static definition and successful runtime result use identical `_meta.ui`; fallback text and structured domain content are independent of the embedded dynamic update.
+
+The wire `Chart` owns a whole-object binding and a strict discriminator: `{kind: "area", accessibleSummary?, props}` or `{kind: "heatmap", accessibleSummary?, props}`. It requires unique stable area series IDs and bounded data, and accepts no callback, formatter, style, URL, JSX, component name, or generic object. Future catalog components require an SDK-valid versioned schema, an explicit client adapter, a synchronized agent schema copy, parity fixtures, and package tests.
 
 ## A2UI actions and errors
 
@@ -151,9 +159,9 @@ The generic `a2ui_error` handler recognizes `VALIDATION_FAILED`, returns a safe 
 
 ## Catalog support and negotiation
 
-The server supports exactly A2UI `v0.9.1` with `https://a2ui.org/specification/v0_9_1/catalogs/basic/catalog.json`; inline and arbitrary catalogs are not accepted. `a2ui-agent-sdk` 0.5.x supplies the bundled schema and catalog validator. Local validation supplements, rather than replaces, that SDK only for application-level consistency such as the registered surface and exact catalog URI.
+The server supports exactly A2UI `v0.9.1` with the official Basic Catalog and `https://fluidbank.app/a2ui/catalogs/finance/v1`; inline and all other catalogs are rejected. `a2ui-agent-sdk` 0.5.x supplies the bundled schema machinery. The Finance schema is loaded with `importlib.resources`, validated at import, and cached. Local validation supplements, rather than replaces, the SDK for registered-surface and catalog consistency.
 
-A2UI recommends selecting catalogs from custom client capabilities during MCP `initialize`. Inspection of FastMCP 4.0.3's documented public server APIs found no stable hook that exposes arbitrary initialization capabilities to these typed handlers with session-scoped storage. The server therefore does not implement or claim initialize-time catalog negotiation and does not depend on FastMCP internals or monkeypatches. Controlled clients may advertise and recognize the fixed catalog; all other clients retain the text and `structuredContent` fallback. Per-call A2UI capability metadata is likewise not used as a substitute for a verified session negotiation API.
+A2UI recommends selecting catalogs from custom client capabilities during MCP `initialize`. Inspection of FastMCP 4.0.3's documented public server APIs found no stable hook that exposes arbitrary initialization capabilities to these typed handlers with session-scoped storage. The server therefore does not implement or claim initialize-time catalog negotiation and does not depend on FastMCP internals or monkeypatches. Controlled clients may advertise and recognize the fixed allowlist; all other clients retain the text and `structuredContent` fallback. Per-call A2UI capability metadata is likewise not used as a substitute for a verified session negotiation API.
 
 ## Security boundary and non-goals
 
@@ -166,7 +174,7 @@ The safety model is layered:
 - Read-only transactions, timeouts, pooling bounds, and row limits constrain execution.
 - Structured results and sanitized errors constrain the MCP boundary.
 
-Explicit non-goals are writes, arbitrary SQL, schema mutation, authentication, multi-tenancy, LLM orchestration, prompt handling, server-side UI rendering, arbitrary/custom catalogs, background jobs, application-data caching, and production exposure of the unauthenticated HTTP listener.
+Explicit non-goals are writes, arbitrary SQL, schema mutation, authentication, multi-tenancy, LLM orchestration, prompt handling, server-side UI rendering, unregistered catalogs, background jobs, application-data caching, and production exposure of the unauthenticated HTTP listener.
 
 ## Operational checks
 

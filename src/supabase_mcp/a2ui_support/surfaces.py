@@ -8,6 +8,10 @@ from importlib.resources import files
 from typing import Any
 
 from supabase_mcp.a2ui_support.constants import (
+    A2UI_BASIC_CATALOG,
+    A2UI_FINANCE_CATALOG,
+    DATA_CHART_RESOURCE_URI,
+    DATA_CHART_SURFACE_ID,
     DATABASE_OVERVIEW_RESOURCE_URI,
     DATABASE_OVERVIEW_SURFACE_ID,
 )
@@ -66,10 +70,21 @@ class SurfaceRegistry:
 DATABASE_OVERVIEW_SURFACE = SurfaceSpec(
     surface_id=DATABASE_OVERVIEW_SURFACE_ID,
     resource_uri=DATABASE_OVERVIEW_RESOURCE_URI,
+    catalog_id=A2UI_BASIC_CATALOG,
     template_name="database_overview.json",
     title="Database overview",
     description="Static A2UI layout for a bounded list of allowlisted database objects.",
 )
 
+DATA_CHART_SURFACE = SurfaceSpec(
+    surface_id=DATA_CHART_SURFACE_ID,
+    resource_uri=DATA_CHART_RESOURCE_URI,
+    catalog_id=A2UI_FINANCE_CATALOG,
+    template_name="data_chart.json",
+    title="Data chart",
+    description="Static A2UI layout for a bounded chart of allowlisted database data.",
+)
+
 SURFACE_REGISTRY = SurfaceRegistry(A2UIValidator())
 SURFACE_REGISTRY.register(DATABASE_OVERVIEW_SURFACE)
+SURFACE_REGISTRY.register(DATA_CHART_SURFACE)

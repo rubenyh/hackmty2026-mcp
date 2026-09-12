@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
+from numbers import Number
 from typing import Any
 
 from sqlalchemy import MetaData, Select, Table, asc, desc, inspect, select, text
@@ -153,6 +154,26 @@ class DatabaseClient:
     def describe_table(self, schema: str, table: str) -> tuple[ColumnDescription, ...]:
         """Return cached safe metadata for an allowlisted table or view."""
         return self._require_object(schema, table).columns
+
+    def require_numeric_columns(self, schema: str, table: str, names: Sequence[str]) -> None:
+        """Reject requested value columns whose reflected SQL types are not numeric."""
+        reflected = self._require_object(schema, table)
+        columns = self._require_columns(reflected.table, names)
+        for column in columns:
+            try:
+                python_type = column.type.python_type
+            except (AttributeError, NotImplementedError) as exc:
+                raise InvalidSelectionError(
+                    "nonnumeric_column", f"Column '{column.name}' is not numeric."
+                ) from exc
+            try:
+                numeric = python_type is not bool and issubclass(python_type, Number)
+            except TypeError:
+                numeric = False
+            if not numeric:
+                raise InvalidSelectionError(
+                    "nonnumeric_column", f"Column '{column.name}' is not numeric."
+                )
 
     async def health_check(self) -> None:
         """Run a minimal read-only database round trip."""

@@ -8,8 +8,10 @@ import pytest
 from fastmcp import Client
 from mcp.types import EmbeddedResource, TextContent, TextResourceContents
 
+import supabase_mcp.tools.a2ui as a2ui_tools
 from supabase_mcp.a2ui_support.constants import A2UI_MIME_TYPE
-from supabase_mcp.a2ui_support.surfaces import DATABASE_OVERVIEW_SURFACE
+from supabase_mcp.a2ui_support.surfaces import DATA_CHART_SURFACE, DATABASE_OVERVIEW_SURFACE
+from supabase_mcp.models import VisualizeAllowedDataResult
 from supabase_mcp.server import mcp
 
 
@@ -33,6 +35,10 @@ async def test_a2ui_resource_and_tool_protocol(monkeypatch: pytest.MonkeyPatch) 
         template = json.loads(contents[0].text)
         assert "createSurface" in template[0]
 
+        chart_contents = await client.read_resource(DATA_CHART_SURFACE.resource_uri)
+        chart_template = json.loads(chart_contents[0].text)
+        assert chart_template[0]["createSurface"]["catalogId"] == DATA_CHART_SURFACE.catalog_id
+
         tools = await client.list_tools()
         tool = next(item for item in tools if item.name == "database_overview")
         assert tool.meta is not None
@@ -42,6 +48,15 @@ async def test_a2ui_resource_and_tool_protocol(monkeypatch: pytest.MonkeyPatch) 
         }
         assert tool.annotations is not None
         assert tool.annotations.read_only_hint is True
+
+        chart_tool = next(item for item in tools if item.name == "visualize_allowed_data")
+        assert chart_tool.meta is not None
+        assert chart_tool.meta["ui"] == {
+            "resourceUri": DATA_CHART_SURFACE.resource_uri,
+            "mimeType": A2UI_MIME_TYPE,
+        }
+        assert chart_tool.annotations is not None
+        assert chart_tool.annotations.read_only_hint is True
 
         action_tool = next(item for item in tools if item.name == "a2ui_action")
         assert set(action_tool.input_schema["properties"]) == {
@@ -83,3 +98,50 @@ async def test_a2ui_resource_and_tool_protocol(monkeypatch: pytest.MonkeyPatch) 
         # A non-A2UI client can ignore EmbeddedResource and still use these values.
         assert result.content[0].text
         assert result.structured_content["object_count"] == 0
+
+        async def fake_chart(_database: object, request: object) -> VisualizeAllowedDataResult:
+            return VisualizeAllowedDataResult.model_validate(
+                {
+                    "ok": True,
+                    "source": {"schema": "public", "table": "cashflow"},
+                    "row_count": 0,
+                    "omitted_null_rows": 0,
+                    "limit": 10,
+                    "truncated": False,
+                    "chart": {
+                        "kind": "area",
+                        "accessibleSummary": "Area chart with no data.",
+                        "props": {
+                            "data": [],
+                            "series": [{"id": "series_1", "label": "income"}],
+                        },
+                    },
+                }
+            )
+
+        monkeypatch.setattr(a2ui_tools, "get_data_chart", fake_chart)
+        chart_result = await client.call_tool(
+            "visualize_allowed_data",
+            {
+                "request": {
+                    "source": {"schema": "public", "table": "cashflow"},
+                    "limit": 10,
+                    "visualization": {
+                        "kind": "area",
+                        "x_column": "month",
+                        "y_columns": ["income"],
+                    },
+                }
+            },
+        )
+        assert chart_result.meta is not None
+        assert chart_result.meta["ui"] == chart_tool.meta["ui"]
+        assert chart_result.structured_content is not None
+        assert chart_result.structured_content["ok"] is True
+        chart_embedded = next(
+            item for item in chart_result.content if isinstance(item, EmbeddedResource)
+        )
+        assert isinstance(chart_embedded.resource, TextResourceContents)
+        chart_dynamic = json.loads(chart_embedded.resource.text)
+        assert len(chart_dynamic) == 1
+        assert set(chart_dynamic[0]) == {"version", "updateDataModel"}

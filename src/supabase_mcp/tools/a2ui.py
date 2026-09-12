@@ -26,8 +26,20 @@ from supabase_mcp.a2ui_support.mappers import (
     database_overview_fallback,
 )
 from supabase_mcp.a2ui_support.response import A2UIResponseFactory
-from supabase_mcp.a2ui_support.surfaces import DATABASE_OVERVIEW_SURFACE, SURFACE_REGISTRY
+from supabase_mcp.a2ui_support.surfaces import (
+    DATA_CHART_SURFACE,
+    DATABASE_OVERVIEW_SURFACE,
+    SURFACE_REGISTRY,
+)
 from supabase_mcp.database import DatabaseClient
+from supabase_mcp.errors import InvalidSelectionError
+from supabase_mcp.models import VisualizeAllowedDataRequest
+from supabase_mcp.services.data_chart import (
+    ChartMappingError,
+    chart_data_model,
+    chart_fallback,
+    get_data_chart,
+)
 from supabase_mcp.services.database_overview import (
     DATABASE_OVERVIEW_MAX_LIMIT,
     DatabaseOverview,
@@ -47,12 +59,18 @@ A2UIErrorPath = Annotated[str, Field(max_length=512)]
 A2UIErrorMessage = Annotated[str, Field(max_length=2_000)]
 
 _overview_factory = A2UIResponseFactory(DATABASE_OVERVIEW_SURFACE)
+_chart_factory = A2UIResponseFactory(DATA_CHART_SURFACE)
 ACTION_REGISTRY = ActionRegistry(SURFACE_REGISTRY)
 
 
 def database_overview_resource() -> str:
     """Return the cached static database-overview A2UI template."""
     return SURFACE_REGISTRY.serialized_template(DATABASE_OVERVIEW_SURFACE)
+
+
+def data_chart_resource() -> str:
+    """Return the cached static finance-catalog chart template."""
+    return SURFACE_REGISTRY.serialized_template(DATA_CHART_SURFACE)
 
 
 def _overview_tool_result(overview: DatabaseOverview) -> ToolResult:
@@ -78,6 +96,43 @@ async def database_overview(
                 "error": {
                     "code": "server_error",
                     "message": "The database overview could not be generated.",
+                },
+            },
+            is_error=True,
+        )
+
+
+async def visualize_allowed_data(
+    request: VisualizeAllowedDataRequest,
+    ctx: Context,
+) -> ToolResult:
+    """Visualize selected columns from one reflected allowlisted table or view."""
+    try:
+        result = await get_data_chart(_database(ctx), request)
+        return _chart_factory.build(
+            fallback_text=chart_fallback(result),
+            data_model=chart_data_model(result, request.title),
+            structured_content=result.model_dump(mode="json", by_alias=True, exclude_none=True),
+        )
+    except (InvalidSelectionError, ChartMappingError) as exc:
+        logger.info("Allowed data visualization rejected code=%s", exc.code)
+        return ToolResult(
+            content=[TextContent(text=exc.safe_message)],
+            structured_content={
+                "ok": False,
+                "error": {"code": exc.code, "message": exc.safe_message},
+            },
+            is_error=True,
+        )
+    except Exception as exc:
+        logger.warning("Allowed data visualization failed (%s)", type(exc).__name__)
+        return ToolResult(
+            content=[TextContent(text="The requested data chart could not be generated.")],
+            structured_content={
+                "ok": False,
+                "error": {
+                    "code": "server_error",
+                    "message": "The requested data chart could not be generated.",
                 },
             },
             is_error=True,

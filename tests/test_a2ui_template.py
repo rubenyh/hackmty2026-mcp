@@ -2,16 +2,31 @@
 
 from __future__ import annotations
 
+import tarfile
 import zipfile
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from hatchling.build import build_wheel
+import pytest
+from hatchling.build import build_sdist, build_wheel
 
-from supabase_mcp.a2ui_support.constants import A2UI_BASIC_CATALOG, A2UI_VERSION
+from supabase_mcp.a2ui_support.catalog_registry import (
+    CATALOG_REGISTRY,
+    CatalogRegistrationError,
+    CatalogRegistry,
+)
+from supabase_mcp.a2ui_support.constants import (
+    A2UI_BASIC_CATALOG,
+    A2UI_FINANCE_CATALOG,
+    A2UI_VERSION,
+)
 from supabase_mcp.a2ui_support.mappers import database_overview_data_model
-from supabase_mcp.a2ui_support.surfaces import DATABASE_OVERVIEW_SURFACE, SURFACE_REGISTRY
+from supabase_mcp.a2ui_support.surfaces import (
+    DATA_CHART_SURFACE,
+    DATABASE_OVERVIEW_SURFACE,
+    SURFACE_REGISTRY,
+)
 from supabase_mcp.models import AllowedObject
 from supabase_mcp.services.database_overview import DatabaseOverview
 
@@ -58,3 +73,43 @@ def test_database_overview_template_is_in_wheel(tmp_path: Path) -> None:
     wheel_name = build_wheel(str(tmp_path))
     with zipfile.ZipFile(tmp_path / wheel_name) as wheel:
         assert "supabase_mcp/a2ui_support/templates/database_overview.json" in wheel.namelist()
+        assert "supabase_mcp/a2ui_support/templates/data_chart.json" in wheel.namelist()
+        assert "supabase_mcp/a2ui_support/catalogs/finance_v1.json" in wheel.namelist()
+
+
+def test_finance_catalog_and_chart_template_are_valid() -> None:
+    schema = CATALOG_REGISTRY.schema(A2UI_FINANCE_CATALOG)
+    assert schema is not None
+    assert schema["catalogId"] == A2UI_FINANCE_CATALOG
+    assert set(schema["components"]) == {"Text", "Button", "Card", "Column", "Chart"}
+
+    messages = SURFACE_REGISTRY.template(DATA_CHART_SURFACE)
+    assert messages[0]["createSurface"]["catalogId"] == A2UI_FINANCE_CATALOG
+    assert [next(key for key in message if key != "version") for message in messages] == [
+        "createSurface",
+        "updateComponents",
+    ]
+    components = messages[1]["updateComponents"]["components"]
+    assert {component["component"] for component in components} == {
+        "Text",
+        "Card",
+        "Column",
+        "Chart",
+    }
+
+
+def test_duplicate_and_unknown_catalogs_are_rejected() -> None:
+    registry = CatalogRegistry()
+    registry.register_basic()
+    with pytest.raises(CatalogRegistrationError, match="Duplicate"):
+        registry.register_basic()
+    with pytest.raises(CatalogRegistrationError, match="Unknown"):
+        registry.validator("https://example.invalid/catalog")
+
+
+def test_catalog_and_template_are_in_sdist(tmp_path: Path) -> None:
+    archive_name = build_sdist(str(tmp_path))
+    with tarfile.open(tmp_path / archive_name, "r:gz") as archive:
+        names = archive.getnames()
+        assert any(name.endswith("/a2ui_support/catalogs/finance_v1.json") for name in names)
+        assert any(name.endswith("/a2ui_support/templates/data_chart.json") for name in names)
