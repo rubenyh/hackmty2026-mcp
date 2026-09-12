@@ -8,7 +8,14 @@ from fastmcp import Context
 from pydantic import ValidationError
 
 from supabase_mcp.errors import InvalidSelectionError
-from supabase_mcp.models import FilterCondition, OrderBy, PublicError, SelectRequest, SelectResult
+from supabase_mcp.models import (
+    FilterCondition,
+    OrderBy,
+    PublicError,
+    SelectRequest,
+    SelectResult,
+    UserScope,
+)
 from supabase_mcp.tools.health import _database
 
 logger = logging.getLogger(__name__)
@@ -17,6 +24,7 @@ logger = logging.getLogger(__name__)
 async def select_rows(
     schema: str,
     table: str,
+    scope: UserScope,
     ctx: Context,
     columns: list[str] | None = None,
     filters: list[FilterCondition] | None = None,
@@ -32,6 +40,7 @@ async def select_rows(
         request = SelectRequest(
             schema=schema,
             table=table,
+            scope=scope,
             columns=columns,
             filters=filters or [],
             order_by=order_by or [],

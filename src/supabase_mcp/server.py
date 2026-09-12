@@ -18,18 +18,20 @@ from mcp.types import ToolAnnotations
 
 from supabase_mcp.a2ui_support.constants import A2UI_MIME_TYPE
 from supabase_mcp.a2ui_support.response import ui_metadata
-from supabase_mcp.a2ui_support.surfaces import DATABASE_OVERVIEW_SURFACE
+from supabase_mcp.a2ui_support.surfaces import DATA_CHART_SURFACE, DATABASE_OVERVIEW_SURFACE
 from supabase_mcp.config import Settings
 from supabase_mcp.database import DatabaseClient
 from supabase_mcp.tools import (
     a2ui_action,
     a2ui_error,
+    data_chart_resource,
     database_overview,
     database_overview_resource,
     describe_table,
     health_check,
     list_allowed_tables,
     select_rows,
+    visualize_allowed_data,
 )
 
 
@@ -71,6 +73,17 @@ mcp.tool(
     ),
 )
 mcp.tool(
+    visualize_allowed_data,
+    meta=ui_metadata(DATA_CHART_SURFACE),
+    annotations=ToolAnnotations(
+        title="Visualize allowed data",
+        read_only_hint=True,
+        destructive_hint=False,
+        idempotent_hint=True,
+        open_world_hint=False,
+    ),
+)
+mcp.tool(
     a2ui_action,
     annotations=ToolAnnotations(
         title="Handle A2UI action",
@@ -97,6 +110,13 @@ mcp.resource(
     description=DATABASE_OVERVIEW_SURFACE.description,
     mime_type=A2UI_MIME_TYPE,
 )(database_overview_resource)
+mcp.resource(
+    DATA_CHART_SURFACE.resource_uri,
+    name="data_chart_a2ui",
+    title=DATA_CHART_SURFACE.title,
+    description=DATA_CHART_SURFACE.description,
+    mime_type=A2UI_MIME_TYPE,
+)(data_chart_resource)
 
 
 def main() -> None:

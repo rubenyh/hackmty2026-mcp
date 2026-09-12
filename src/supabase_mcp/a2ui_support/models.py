@@ -9,6 +9,7 @@ class SurfaceSpec:
 
     surface_id: str
     resource_uri: str
+    catalog_id: str
     template_name: str
     title: str
     description: str

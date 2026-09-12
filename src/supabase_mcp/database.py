@@ -5,9 +5,10 @@ from __future__ import annotations
 import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
+from numbers import Number
 from typing import Any
 
-from sqlalchemy import MetaData, Select, Table, asc, desc, inspect, select, text
+from sqlalchemy import MetaData, Select, Table, asc, desc, exists, inspect, select, text
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, create_async_engine
 
@@ -20,6 +21,7 @@ from supabase_mcp.models import (
     FilterOperator,
     OrderDirection,
     SelectRequest,
+    UserScope,
 )
 from supabase_mcp.serialization import serialize_row
 
@@ -31,6 +33,47 @@ class ReflectedObject:
     table: Table
     kind: str
     columns: tuple[ColumnDescription, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class DirectScope:
+    column: str
+
+
+@dataclass(frozen=True, slots=True)
+class JoinScope:
+    local_column: str
+    owner_schema: str
+    owner_table: str
+    owner_key: str
+    owner_column: str
+
+
+TableUserScope = DirectScope | JoinScope
+
+# This map mirrors the checked-in demo schema/seed history. Row-returning access to any
+# other allowlisted object fails closed until an explicit ownership relationship is added.
+TABLE_USER_SCOPES: dict[tuple[str, str], TableUserScope] = {
+    ("public", "users"): DirectScope(column="id"),
+    ("public", "accessibility_preferences"): DirectScope(column="user_id"),
+    ("public", "accounts"): DirectScope(column="user_id"),
+    ("public", "transactions"): JoinScope(
+        local_column="account_id",
+        owner_schema="public",
+        owner_table="accounts",
+        owner_key="id",
+        owner_column="user_id",
+    ),
+    ("public", "subscriptions"): DirectScope(column="user_id"),
+    ("public", "transfers"): DirectScope(column="user_id"),
+    ("public", "monthly_cash_flow"): JoinScope(
+        local_column="account_id",
+        owner_schema="public",
+        owner_table="accounts",
+        owner_key="id",
+        owner_column="user_id",
+    ),
+}
 
 
 class DatabaseClient:
@@ -60,7 +103,10 @@ class DatabaseClient:
                         reflected = await connection.run_sync(self._reflect_allowlist)
                 self._objects = reflected
         except Exception as exc:
-            logger.exception("Database allowlist validation failed while starting DatabaseClient")
+            logger.warning(
+                "Database allowlist validation failed while starting DatabaseClient (%s)",
+                type(exc).__name__,
+            )
             await self.stop()
             raise DatabaseConfigurationError(
                 "Could not validate MCP_ALLOWED_TABLES. Confirm object names, "
@@ -154,6 +200,26 @@ class DatabaseClient:
         """Return cached safe metadata for an allowlisted table or view."""
         return self._require_object(schema, table).columns
 
+    def require_numeric_columns(self, schema: str, table: str, names: Sequence[str]) -> None:
+        """Reject requested value columns whose reflected SQL types are not numeric."""
+        reflected = self._require_object(schema, table)
+        columns = self._require_columns(reflected.table, names)
+        for column in columns:
+            try:
+                python_type = column.type.python_type
+            except (AttributeError, NotImplementedError) as exc:
+                raise InvalidSelectionError(
+                    "nonnumeric_column", f"Column '{column.name}' is not numeric."
+                ) from exc
+            try:
+                numeric = python_type is not bool and issubclass(python_type, Number)
+            except TypeError:
+                numeric = False
+            if not numeric:
+                raise InvalidSelectionError(
+                    "nonnumeric_column", f"Column '{column.name}' is not numeric."
+                )
+
     async def health_check(self) -> None:
         """Run a minimal read-only database round trip."""
         engine = self._require_engine()
@@ -186,7 +252,21 @@ class DatabaseClient:
                 )
             selected_columns = self._require_columns(table, request.columns)
 
-        statement = select(*selected_columns)
+        control_columns = self.user_scope_columns(request.schema_name, request.table)
+        if any(condition.column in control_columns for condition in request.filters):
+            raise InvalidSelectionError(
+                "ownership_filter_not_allowed",
+                "Ownership columns are controlled by the application user scope.",
+            )
+
+        statement = select(*selected_columns).where(
+            self._user_scope_expression(
+                request.schema_name,
+                request.table,
+                reflected,
+                request.scope,
+            )
+        )
         for condition in request.filters:
             column = self._require_columns(table, [condition.column])[0]
             statement = statement.where(self._filter_expression(column, condition))
@@ -201,6 +281,59 @@ class DatabaseClient:
             statement = statement.order_by(*(asc(column) for column in table.primary_key.columns))
 
         return statement.limit(limit + 1).offset(request.offset), limit
+
+    def user_scope_columns(self, schema: str, table_name: str) -> frozenset[str]:
+        """Return columns reserved for enforcing the configured ownership rule."""
+        rule = TABLE_USER_SCOPES.get((schema, table_name))
+        if rule is None:
+            raise InvalidSelectionError(
+                "user_scope_not_configured",
+                "User-scoped access is not configured for the requested object.",
+            )
+        column = rule.column if isinstance(rule, DirectScope) else rule.local_column
+        return frozenset({column})
+
+    def _user_scope_expression(
+        self,
+        schema: str,
+        table_name: str,
+        reflected: ReflectedObject,
+        scope: UserScope,
+    ) -> Any:
+        rule = TABLE_USER_SCOPES.get((schema, table_name))
+        if rule is None:
+            raise InvalidSelectionError(
+                "user_scope_not_configured",
+                "User-scoped access is not configured for the requested object.",
+            )
+        table = reflected.table
+        if isinstance(rule, DirectScope):
+            column = self._require_scope_column(table, rule.column)
+            return column == scope.user_id
+
+        local_column = self._require_scope_column(table, rule.local_column)
+        owner = self._objects.get((rule.owner_schema, rule.owner_table))
+        if owner is None:
+            raise InvalidSelectionError(
+                "user_scope_not_configured",
+                "User-scoped access is not configured for the requested object.",
+            )
+        owner_key = self._require_scope_column(owner.table, rule.owner_key)
+        owner_column = self._require_scope_column(owner.table, rule.owner_column)
+        return exists(
+            select(1)
+            .select_from(owner.table)
+            .where(owner_key == local_column, owner_column == scope.user_id)
+        )
+
+    @staticmethod
+    def _require_scope_column(table: Table, name: str) -> Any:
+        if name not in table.c:
+            raise InvalidSelectionError(
+                "user_scope_not_configured",
+                "User-scoped access is not configured for the requested object.",
+            )
+        return table.c[name]
 
     @staticmethod
     def _filter_expression(column: Any, condition: FilterCondition) -> Any:
@@ -235,8 +368,27 @@ class DatabaseClient:
         async with engine.connect() as connection:
             async with connection.begin():
                 await self._configure_transaction(connection)
+                await self._validate_user_scope(connection, request.scope)
                 result = await connection.execute(statement)
                 mappings = result.mappings().all()
         truncated = len(mappings) > limit
         rows = [serialize_row(dict(row)) for row in mappings[:limit]]
         return rows, limit, truncated
+
+    async def _validate_user_scope(self, connection: AsyncConnection, scope: UserScope) -> None:
+        users = self._objects.get(("public", "users"))
+        if users is None or "id" not in users.table.c or "is_demo" not in users.table.c:
+            raise InvalidSelectionError(
+                "user_scope_not_configured",
+                "User-scoped access is not configured for the requested object.",
+            )
+        known_user = await connection.scalar(
+            select(
+                exists().where(users.table.c.id == scope.user_id, users.table.c.is_demo.is_(True))
+            )
+        )
+        if known_user is not True:
+            raise InvalidSelectionError(
+                "unknown_user_id",
+                "The selected demo user is not configured.",
+            )

@@ -39,7 +39,7 @@ Set the database URL and exact object allowlist in `.env`:
 ```env
 SUPABASE_DATABASE_URL=postgresql://mcp_reader:REPLACE_WITH_PASSWORD@db.PROJECT_REF.supabase.co:5432/postgres?sslmode=require
 MCP_ALLOWED_SCHEMAS=public
-MCP_ALLOWED_TABLES=public.customers,public.accounts,public.transactions
+MCP_ALLOWED_TABLES=public.users,public.accessibility_preferences,public.accounts,public.transactions,public.subscriptions,public.transfers,public.monthly_cash_flow
 ```
 
 For the Supabase session pooler, use its connection parameters. Both `postgresql://` and `postgresql+psycopg://` are accepted. Percent-encode special characters in usernames and passwords.
@@ -140,10 +140,13 @@ Importing or inspecting the object does not load `Settings`, start a transport, 
 - `health_check`: runs a sanitized `SELECT 1` readiness check.
 - `list_allowed_tables`: lists configured objects that were successfully reflected at startup.
 - `describe_table`: returns cached column metadata for one allowlisted table or view.
-- `select_rows`: reads selected columns with typed filters, ordering, limit, and offset.
+- `select_rows`: reads selected columns with a mandatory typed demo-user scope plus typed filters, ordering, limit, and offset.
 - `database_overview`: returns a bounded database-object overview with A2UI v0.9.1 presentation metadata, a dynamic data-model update, structured domain data, and a text fallback.
+- `visualize_allowed_data`: reads only selected columns from one reflected allowlisted object and maps them to a bounded area chart (up to 240 rows and four numeric series) or calendar heatmap (up to 500 rows).
 - `a2ui_action`: dispatches the five A2UI action fields through an explicit read-only action allowlist. The initial `refresh_database_overview` action refreshes the overview using a validated limit.
 - `a2ui_error`: safely acknowledges client rendering and validation reports without echoing their potentially sensitive message.
+
+`select_rows` and `visualize_allowed_data` require `scope: {"user_id": "<seeded-demo-uuid>"}`. The scope is separate from caller-selected filters and is always combined with them using `AND`. `users`, `accessibility_preferences`, `accounts`, `subscriptions`, and `transfers` use direct ownership; `transactions` and `monthly_cash_flow` use an `EXISTS` relationship through `accounts`. Unknown demo users and allowlisted objects without a configured ownership rule fail closed. Ownership columns cannot be supplied as ordinary filters, and chart mappings cannot use them as visual data.
 
 `select_rows` supports `eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `in`, `like`, `ilike`, and `is_null`. Filter values are JSON scalars; `in` accepts a non-empty list of at most 100 scalars. The response includes `row_count`, the effective `limit`, `offset`, and a `truncated` flag. If no ordering is supplied, tables with primary keys are ordered by those keys.
 
@@ -151,7 +154,9 @@ Importing or inspecting the object does not load `Settings`, start a transport, 
 
 A2UI is a declarative presentation protocol. It does not replace MCP, FastMCP, the database service, or PostgreSQL permissions. This server implements the current production protocol version `v0.9.1` with MIME type `application/a2ui+json`; it does not use the candidate v1.0 protocol and does not run client-provided code.
 
-The database overview separates cacheable presentation from changing data:
+Both visual surfaces separate cacheable presentation from changing data. `database_overview` remains on the official Basic Catalog at `a2ui://database/overview`. `visualize_allowed_data` uses `a2ui://finance/data-chart` and the project-owned catalog `https://fluidbank.app/a2ui/catalogs/finance/v1`, which contains only `Text`, `Button`, `Card`, `Column`, and `Chart`.
+
+The database overview flow is:
 
 1. `resources/list` advertises `a2ui://database/overview`.
 2. `resources/read` returns its static `createSurface` and `updateComponents` messages. The template contains data bindings but no Supabase results.
@@ -161,6 +166,12 @@ The database overview separates cacheable presentation from changing data:
    - an `EmbeddedResource` containing only `updateDataModel`;
    - `_meta.ui` linking the result to `a2ui://database/overview`.
 4. An A2UI-capable client fetches and caches the template, applies the dynamic update, and renders the component tree using its own widgets.
+
+The chart resource follows the same flow. Its packaged `data_chart.json` contains only `createSurface` and `updateComponents`; the tool embeds only `updateDataModel`. The strict request selects a canonical demo-user scope, reflected source, business filters, ordering, limit, and either `{kind: "area", x_column, y_columns}` or `{kind: "heatmap", date_column, value_column}`. It cannot select a component, catalog, URI, style, JSX, or raw A2UI. Numeric columns are checked from reflected metadata, values must be finite, ordering is deterministic, and rows with null required values are omitted and counted. Duplicate mapped labels/dates and malformed dates fail safely.
+
+This scope is hackathon-MVP application filtering. It does not add RLS, JWT verification, Supabase Auth enforcement, or a production authorization boundary; the MCP database role can still read all rows.
+
+`Chart` binds one whole discriminated value at `/chart`: `{kind: "area", accessibleSummary?, props: AreaChartProps}` or `{kind: "heatmap", accessibleSummary?, props: HeatmapChartProps}`. Area series require stable unique IDs; both variants reject unknown properties and bound all arrays and strings. Empty arrays are valid and delegate to the existing client empty states.
 
 The embedded resource is annotated for the `user` audience so a supporting host can render it without putting presentation JSON into the model context. The separate fallback and structured domain data remain available for reasoning and for clients that ignore embedded resources.
 
@@ -179,22 +190,22 @@ In Inspector:
 3. Call it with `{"limit": 25}` and inspect its text, `structuredContent`, embedded `updateDataModel`, and runtime `_meta.ui`.
 4. Optionally call `a2ui_action` with `name`, `surfaceId`, `sourceComponentId`, `timestamp`, and `context` as emitted by the refresh button.
 
-Inspector exposes the real MCP JSON but does not render A2UI. A rendering client must recognize `application/a2ui+json`, resolve `_meta.ui.resourceUri`, validate/process v0.9.1 messages, implement the negotiated Basic Catalog components, maintain per-surface data state, and forward component actions to `a2ui_action`.
+Inspector exposes the real MCP JSON but does not render A2UI. A rendering client must recognize `application/a2ui+json`, resolve `_meta.ui.resourceUri`, validate/process v0.9.1 messages, implement the declared allowlisted catalog, maintain per-surface data state, and forward component actions to `a2ui_action`.
 
 ### Extend A2UI safely
 
 To add a surface:
 
-1. Add a static JSON template under `src/supabase_mcp/a2ui_support/templates/` using `v0.9.1`, the allowlisted Basic Catalog, stable component IDs, a `root`, and data bindings.
+1. Add a static JSON template under `src/supabase_mcp/a2ui_support/templates/` using `v0.9.1`, one registered catalog, stable component IDs, a `root`, and data bindings.
 2. Add a `SurfaceSpec` and register it in `a2ui_support/surfaces.py`; registration loads it through `importlib.resources`, rejects duplicate IDs/URIs or missing templates, and validates it with the official SDK.
 3. Publish the cached template with `mcp.resource(...)` and its stable `a2ui://` URI.
 4. Write a pure mapper from the domain result to the template data model, then use `A2UIResponseFactory` in only the tool that needs that surface.
 
-To add an action, include it on a template component, define a strict Pydantic context model, and add one fixed `RegisteredAction` to the central registry. Do not create a tool per button or derive handlers with `eval`, dynamic imports, or input-driven `getattr`.
+To add a custom component, first extend the versioned catalog, validate it with the installed SDK, synchronize the checked-in agent copy, implement an explicit client adapter, and add shared accept/reject fixtures plus package-content tests. Do not expose renderers, error boundaries, low-level drawing primitives, callbacks, styles, or generic objects. To add an action, include it on a template component, define a strict Pydantic context model, and add one fixed `RegisteredAction` to the central registry. Do not create a tool per button or derive handlers with `eval`, dynamic imports, or input-driven `getattr`.
 
 ### Catalog negotiation limitation
 
-A2UI recommends negotiating supported catalogs during MCP `initialize`. FastMCP 4.0.3 does not expose a documented public server hook for reading arbitrary client initialization capabilities and persisting a selected custom catalog per session. This implementation therefore does not claim initialize-time negotiation, does not use FastMCP internals or monkeypatching, and emits only the fixed A2UI v0.9.1 Basic Catalog. A controlled client can declare A2UI support and recognize that catalog; unsupported clients continue to use the text and structured-data fallback. Per-call capability metadata is not consumed because FastMCP does not expose it to these typed handlers as a stable catalog-negotiation API.
+A2UI recommends negotiating supported catalogs during MCP `initialize`. FastMCP 4.0.3 does not expose a documented public server hook for reading arbitrary client initialization capabilities and persisting a selected custom catalog per session. This implementation therefore does not claim initialize-time negotiation, does not use FastMCP internals or monkeypatching, and emits only its fixed allowlist: the official Basic Catalog and Finance Catalog v1. A controlled client must recognize the catalog declared by each surface; unsupported clients continue to use the text and structured-data fallback. Per-call capability metadata is not consumed because FastMCP does not expose it to these typed handlers as a stable catalog-negotiation API.
 
 ## Validate changes
 

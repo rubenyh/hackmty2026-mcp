@@ -1,0 +1,47 @@
+[
+  {
+    "version": "v0.9.1",
+    "createSurface": {
+      "surfaceId": "data-chart",
+      "catalogId": "https://fluidbank.app/a2ui/catalogs/finance/v1"
+    }
+  },
+  {
+    "version": "v0.9.1",
+    "updateComponents": {
+      "surfaceId": "data-chart",
+      "components": [
+        {
+          "id": "root",
+          "component": "Card",
+          "child": "chart_column"
+        },
+        {
+          "id": "chart_column",
+          "component": "Column",
+          "children": ["chart_title", "chart_visual", "chart_summary"]
+        },
+        {
+          "id": "chart_title",
+          "component": "Text",
+          "text": {"path": "/title"},
+          "variant": "h2"
+        },
+        {
+          "id": "chart_visual",
+          "component": "Chart",
+          "chart": {"path": "/chart"}
+        },
+        {
+          "id": "chart_summary",
+          "component": "Text",
+          "text": {"path": "/summary"},
+          "accessibility": {
+            "label": "Resumen textual del gráfico",
+            "description": {"path": "/summary"}
+          }
+        }
+      ]
+    }
+  }
+]

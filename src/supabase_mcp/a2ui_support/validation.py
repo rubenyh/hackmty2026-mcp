@@ -5,16 +5,8 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from a2ui.basic_catalog.provider import BasicCatalog  # type: ignore[import-untyped]
-from a2ui.inference_formats.direct_json import (  # type: ignore[import-untyped]
-    DirectJsonFormat,
-)
-
-from supabase_mcp.a2ui_support.constants import (
-    A2UI_BASIC_CATALOG,
-    A2UI_SDK_VERSION,
-    A2UI_VERSION,
-)
+from supabase_mcp.a2ui_support.catalog_registry import CATALOG_REGISTRY, CatalogRegistry
+from supabase_mcp.a2ui_support.constants import A2UI_VERSION
 from supabase_mcp.a2ui_support.models import SurfaceSpec
 
 _MESSAGE_KEYS = frozenset({"createSurface", "updateComponents", "updateDataModel", "deleteSurface"})
@@ -27,22 +19,17 @@ class A2UIValidationError(ValueError):
 class A2UIValidator:
     """Validate v0.9.1 messages with the official SDK and local integration rules."""
 
-    def __init__(self) -> None:
-        schema_format = DirectJsonFormat(
-            version=A2UI_SDK_VERSION,
-            catalogs=[BasicCatalog.get_config(A2UI_SDK_VERSION)],
-            accepts_inline_catalogs=False,
-        )
-        self._validator = schema_format.get_selected_catalog().validator
+    def __init__(self, catalogs: CatalogRegistry | None = None) -> None:
+        self._catalogs = catalogs or CATALOG_REGISTRY
 
     def validate_message(self, message: Mapping[str, Any], surface: SurfaceSpec) -> None:
         """Validate one dynamic message and ensure it targets the selected surface."""
         self._validate_envelope(message, surface)
         if "createSurface" in message:
             creation = message["createSurface"]
-            if not isinstance(creation, Mapping) or creation.get("catalogId") != A2UI_BASIC_CATALOG:
+            if not isinstance(creation, Mapping) or creation.get("catalogId") != surface.catalog_id:
                 raise A2UIValidationError("A2UI createSurface uses an unsupported catalog")
-        self._sdk_validate(dict(message))
+        self._sdk_validate(dict(message), surface.catalog_id)
 
     def validate_template(
         self, messages: Sequence[Mapping[str, Any]], surface: SurfaceSpec
@@ -61,7 +48,7 @@ class A2UIValidator:
             self._validate_envelope(message, surface)
 
         creation = messages[0]["createSurface"]
-        if not isinstance(creation, Mapping) or creation.get("catalogId") != A2UI_BASIC_CATALOG:
+        if not isinstance(creation, Mapping) or creation.get("catalogId") != surface.catalog_id:
             raise A2UIValidationError("A2UI template uses an unsupported catalog")
 
         update = messages[1]["updateComponents"]
@@ -80,7 +67,7 @@ class A2UIValidator:
         if "root" not in component_ids:
             raise A2UIValidationError("A2UI template must contain a root component")
 
-        self._sdk_validate([dict(message) for message in messages])
+        self._sdk_validate([dict(message) for message in messages], surface.catalog_id)
 
     @staticmethod
     def validate_json_pointer(path: str) -> None:
@@ -108,9 +95,11 @@ class A2UIValidator:
         if not isinstance(body, Mapping) or body.get("surfaceId") != surface.surface_id:
             raise A2UIValidationError("A2UI message targets an unexpected surface")
 
-    def _sdk_validate(self, payload: dict[str, Any] | list[dict[str, Any]]) -> None:
+    def _sdk_validate(
+        self, payload: dict[str, Any] | list[dict[str, Any]], catalog_id: str
+    ) -> None:
         try:
-            self._validator.validate(payload)
+            self._catalogs.validator(catalog_id).validate(payload)
         except Exception as exc:
             raise A2UIValidationError(
                 "A2UI payload does not conform to the official v0.9.1 schemas"
