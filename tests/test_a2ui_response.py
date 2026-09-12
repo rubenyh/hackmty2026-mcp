@@ -8,10 +8,10 @@ from copy import deepcopy
 import pytest
 from mcp.types import EmbeddedResource, TextContent, TextResourceContents
 
-from supabase_mcp.a2ui.constants import A2UI_MIME_TYPE, A2UI_VERSION
-from supabase_mcp.a2ui.response import A2UIResponseFactory
-from supabase_mcp.a2ui.surfaces import DATABASE_OVERVIEW_SURFACE
-from supabase_mcp.a2ui.validation import A2UIValidationError
+from supabase_mcp.a2ui_support.constants import A2UI_MIME_TYPE, A2UI_VERSION
+from supabase_mcp.a2ui_support.response import A2UIResponseFactory
+from supabase_mcp.a2ui_support.surfaces import DATABASE_OVERVIEW_SURFACE
+from supabase_mcp.a2ui_support.validation import A2UIValidationError
 
 
 def test_response_factory_builds_complete_non_mutating_result() -> None:

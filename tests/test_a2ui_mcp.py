@@ -8,8 +8,8 @@ import pytest
 from fastmcp import Client
 from mcp.types import EmbeddedResource, TextContent, TextResourceContents
 
-from supabase_mcp.a2ui.constants import A2UI_MIME_TYPE
-from supabase_mcp.a2ui.surfaces import DATABASE_OVERVIEW_SURFACE
+from supabase_mcp.a2ui_support.constants import A2UI_MIME_TYPE
+from supabase_mcp.a2ui_support.surfaces import DATABASE_OVERVIEW_SURFACE
 from supabase_mcp.server import mcp
 
 

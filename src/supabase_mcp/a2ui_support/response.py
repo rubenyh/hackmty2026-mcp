@@ -9,9 +9,9 @@ from typing import Any
 from fastmcp.tools import ToolResult
 from mcp.types import Annotations, EmbeddedResource, TextContent, TextResourceContents
 
-from supabase_mcp.a2ui.constants import A2UI_MIME_TYPE, A2UI_VERSION
-from supabase_mcp.a2ui.models import SurfaceSpec
-from supabase_mcp.a2ui.validation import A2UIValidationError, A2UIValidator
+from supabase_mcp.a2ui_support.constants import A2UI_MIME_TYPE, A2UI_VERSION
+from supabase_mcp.a2ui_support.models import SurfaceSpec
+from supabase_mcp.a2ui_support.validation import A2UIValidationError, A2UIValidator
 from supabase_mcp.serialization import to_json_safe
 
 

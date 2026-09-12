@@ -10,7 +10,7 @@ from typing import Any
 from fastmcp.tools import ToolResult
 from pydantic import BaseModel, Field, ValidationError, model_validator
 
-from supabase_mcp.a2ui.surfaces import SurfaceRegistry
+from supabase_mcp.a2ui_support.surfaces import SurfaceRegistry
 from supabase_mcp.database import DatabaseClient
 from supabase_mcp.models import StrictModel
 from supabase_mcp.services.database_overview import DATABASE_OVERVIEW_MAX_LIMIT

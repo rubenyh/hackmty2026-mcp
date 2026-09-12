@@ -10,20 +10,23 @@ from fastmcp.tools import ToolResult
 from mcp.types import TextContent
 from pydantic import BaseModel, Field
 
-from supabase_mcp.a2ui.actions import (
+from supabase_mcp.a2ui_support.actions import (
     ActionDispatchError,
     ActionRegistry,
     RefreshDatabaseOverviewContext,
     RegisteredAction,
 )
-from supabase_mcp.a2ui.constants import (
+from supabase_mcp.a2ui_support.constants import (
     DATABASE_OVERVIEW_DEFAULT_LIMIT,
     REFRESH_DATABASE_OVERVIEW_ACTION,
     REFRESH_DATABASE_OVERVIEW_COMPONENT_ID,
 )
-from supabase_mcp.a2ui.mappers import database_overview_data_model, database_overview_fallback
-from supabase_mcp.a2ui.response import A2UIResponseFactory
-from supabase_mcp.a2ui.surfaces import DATABASE_OVERVIEW_SURFACE, SURFACE_REGISTRY
+from supabase_mcp.a2ui_support.mappers import (
+    database_overview_data_model,
+    database_overview_fallback,
+)
+from supabase_mcp.a2ui_support.response import A2UIResponseFactory
+from supabase_mcp.a2ui_support.surfaces import DATABASE_OVERVIEW_SURFACE, SURFACE_REGISTRY
 from supabase_mcp.database import DatabaseClient
 from supabase_mcp.services.database_overview import (
     DATABASE_OVERVIEW_MAX_LIMIT,

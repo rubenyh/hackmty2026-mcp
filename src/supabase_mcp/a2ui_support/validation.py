@@ -10,12 +10,12 @@ from a2ui.inference_formats.direct_json import (  # type: ignore[import-untyped]
     DirectJsonFormat,
 )
 
-from supabase_mcp.a2ui.constants import (
+from supabase_mcp.a2ui_support.constants import (
     A2UI_BASIC_CATALOG,
     A2UI_SDK_VERSION,
     A2UI_VERSION,
 )
-from supabase_mcp.a2ui.models import SurfaceSpec
+from supabase_mcp.a2ui_support.models import SurfaceSpec
 
 _MESSAGE_KEYS = frozenset({"createSurface", "updateComponents", "updateDataModel", "deleteSurface"})
 

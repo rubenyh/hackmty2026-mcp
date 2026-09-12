@@ -73,6 +73,37 @@ By default the HTTP MCP endpoint is `http://127.0.0.1:8000/mcp`. The loopback en
 
 On Windows, start the module as shown above. `supabase_mcp.server` selects the event-loop policy Psycopg async requires before importing the database stack.
 
+## Deploy to Prefect Horizon
+
+Configure Horizon with these exact build settings:
+
+- **Project root:** the repository root containing this `pyproject.toml`. If this directory is checked out as `mcp/` inside a larger monorepo, select `mcp/` as the project root.
+- **Python:** `3.12`.
+- **Dependencies / requirements:** `pyproject.toml`.
+- **Entrypoint:** `src/supabase_mcp/server.py:mcp`.
+
+The `:mcp` suffix is required: Horizon imports the module-level `FastMCP` object and does not execute `main()` or depend on the local stdio transport. The package uses a Hatchling `src` layout and is installed during the build, so no manual `PYTHONPATH` is needed.
+
+Configure runtime values in Horizon's environment/secrets UI, never in a committed `.env`:
+
+- **Required secret:** `SUPABASE_DATABASE_URL`, using a dedicated read-only PostgreSQL role and TLS.
+- **Required for data exposure:** `MCP_ALLOWED_TABLES`, containing the exact qualified tables/views. Empty or omitted remains deny-all.
+- **Recommended explicit setting:** `MCP_ALLOWED_SCHEMAS` (defaults to `public`).
+- **Optional controls:** `MCP_DEFAULT_LIMIT`, `MCP_MAX_LIMIT`, `MCP_STATEMENT_TIMEOUT_MS`, and `LOG_LEVEL`.
+
+`MCP_TRANSPORT`, `MCP_HOST`, and `MCP_PORT` are only used by direct execution through `main()`; Horizon owns its hosted transport when it imports `mcp`.
+
+Before deploying, reproduce Horizon's build/import path from the repository root:
+
+```bash
+uv sync --locked
+uv build
+uv run python -c "from supabase_mcp.server import mcp; print(type(mcp))"
+uv run fastmcp inspect src/supabase_mcp/server.py:mcp
+```
+
+Importing or inspecting the object does not load `Settings`, start a transport, construct a database engine, or connect to Supabase. Runtime settings and database reflection begin only when FastMCP enters `app_lifespan`.
+
 ## Tools
 
 - `health_check`: runs a sanitized `SELECT 1` readiness check.
@@ -123,8 +154,8 @@ Inspector exposes the real MCP JSON but does not render A2UI. A rendering client
 
 To add a surface:
 
-1. Add a static JSON template under `src/supabase_mcp/a2ui/templates/` using `v0.9.1`, the allowlisted Basic Catalog, stable component IDs, a `root`, and data bindings.
-2. Add a `SurfaceSpec` and register it in `a2ui/surfaces.py`; registration loads it through `importlib.resources`, rejects duplicate IDs/URIs or missing templates, and validates it with the official SDK.
+1. Add a static JSON template under `src/supabase_mcp/a2ui_support/templates/` using `v0.9.1`, the allowlisted Basic Catalog, stable component IDs, a `root`, and data bindings.
+2. Add a `SurfaceSpec` and register it in `a2ui_support/surfaces.py`; registration loads it through `importlib.resources`, rejects duplicate IDs/URIs or missing templates, and validates it with the official SDK.
 3. Publish the cached template with `mcp.resource(...)` and its stable `a2ui://` URI.
 4. Write a pure mapper from the domain result to the template data model, then use `A2UIResponseFactory` in only the tool that needs that surface.
 
