@@ -10,6 +10,8 @@ from typing import Any
 from supabase_mcp.a2ui_support.constants import (
     A2UI_BASIC_CATALOG,
     A2UI_FINANCE_CATALOG,
+    CHAT_MESSAGE_RESOURCE_URI,
+    CHAT_MESSAGE_SURFACE_ID,
     DATA_CHART_RESOURCE_URI,
     DATA_CHART_SURFACE_ID,
     DATABASE_OVERVIEW_RESOURCE_URI,
@@ -85,6 +87,16 @@ DATA_CHART_SURFACE = SurfaceSpec(
     description="Static A2UI layout for a bounded chart of allowlisted database data.",
 )
 
+CHAT_MESSAGE_SURFACE = SurfaceSpec(
+    surface_id=CHAT_MESSAGE_SURFACE_ID,
+    resource_uri=CHAT_MESSAGE_RESOURCE_URI,
+    catalog_id=A2UI_BASIC_CATALOG,
+    template_name="chat_message.json",
+    title="Chat message",
+    description="Static A2UI layout wrapping one plain conversational reply as a text surface.",
+)
+
 SURFACE_REGISTRY = SurfaceRegistry(A2UIValidator())
 SURFACE_REGISTRY.register(DATABASE_OVERVIEW_SURFACE)
 SURFACE_REGISTRY.register(DATA_CHART_SURFACE)
+SURFACE_REGISTRY.register(CHAT_MESSAGE_SURFACE)

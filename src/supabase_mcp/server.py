@@ -18,12 +18,18 @@ from mcp.types import ToolAnnotations
 
 from supabase_mcp.a2ui_support.constants import A2UI_MIME_TYPE
 from supabase_mcp.a2ui_support.response import ui_metadata
-from supabase_mcp.a2ui_support.surfaces import DATA_CHART_SURFACE, DATABASE_OVERVIEW_SURFACE
+from supabase_mcp.a2ui_support.surfaces import (
+    CHAT_MESSAGE_SURFACE,
+    DATA_CHART_SURFACE,
+    DATABASE_OVERVIEW_SURFACE,
+)
 from supabase_mcp.config import Settings
 from supabase_mcp.database import DatabaseClient
 from supabase_mcp.tools import (
     a2ui_action,
     a2ui_error,
+    chat_message,
+    chat_message_resource,
     data_chart_resource,
     database_overview,
     database_overview_resource,
@@ -84,6 +90,17 @@ mcp.tool(
     ),
 )
 mcp.tool(
+    chat_message,
+    meta=ui_metadata(CHAT_MESSAGE_SURFACE),
+    annotations=ToolAnnotations(
+        title="Present chat message",
+        read_only_hint=True,
+        destructive_hint=False,
+        idempotent_hint=True,
+        open_world_hint=False,
+    ),
+)
+mcp.tool(
     a2ui_action,
     annotations=ToolAnnotations(
         title="Handle A2UI action",
@@ -117,6 +134,13 @@ mcp.resource(
     description=DATA_CHART_SURFACE.description,
     mime_type=A2UI_MIME_TYPE,
 )(data_chart_resource)
+mcp.resource(
+    CHAT_MESSAGE_SURFACE.resource_uri,
+    name="chat_message_a2ui",
+    title=CHAT_MESSAGE_SURFACE.title,
+    description=CHAT_MESSAGE_SURFACE.description,
+    mime_type=A2UI_MIME_TYPE,
+)(chat_message_resource)
 
 
 def main() -> None:

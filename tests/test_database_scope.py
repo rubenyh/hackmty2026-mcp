@@ -167,3 +167,20 @@ async def test_unknown_user_scope_fails_instead_of_returning_an_empty_success() 
             UserScope(user_id=USER_A),
         )
     assert caught.value.code == "unknown_user_id"
+
+
+@pytest.mark.asyncio
+async def test_any_real_user_is_accepted_without_a_demo_flag() -> None:
+    """Scope membership is existence in public.users, not a demo marker."""
+    captured: list[object] = []
+
+    class KnownUserConnection:
+        async def scalar(self, statement: object) -> bool:
+            captured.append(statement)
+            return True
+
+    await _client()._validate_user_scope(
+        KnownUserConnection(),  # type: ignore[arg-type]
+        UserScope(user_id=USER_A),
+    )
+    assert "is_demo" not in str(captured[0])

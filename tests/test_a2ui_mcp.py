@@ -11,7 +11,11 @@ from sqlalchemy.exc import SQLAlchemyError
 
 import supabase_mcp.tools.a2ui as a2ui_tools
 from supabase_mcp.a2ui_support.constants import A2UI_MIME_TYPE
-from supabase_mcp.a2ui_support.surfaces import DATA_CHART_SURFACE, DATABASE_OVERVIEW_SURFACE
+from supabase_mcp.a2ui_support.surfaces import (
+    CHAT_MESSAGE_SURFACE,
+    DATA_CHART_SURFACE,
+    DATABASE_OVERVIEW_SURFACE,
+)
 from supabase_mcp.a2ui_support.validation import A2UIValidator
 from supabase_mcp.models import VisualizeAllowedDataResult
 from supabase_mcp.server import mcp
@@ -48,8 +52,15 @@ async def test_a2ui_resource_and_tool_protocol(monkeypatch: pytest.MonkeyPatch) 
         A2UIValidator().validate_template(chart_template, DATA_CHART_SURFACE)
         assert chart_template[0]["createSurface"]["catalogId"] == DATA_CHART_SURFACE.catalog_id
 
+        chat_contents = await client.read_resource(CHAT_MESSAGE_SURFACE.resource_uri)
+        assert len(chat_contents) == 1
+        assert isinstance(chat_contents[0], TextResourceContents)
+        chat_template = json.loads(chat_contents[0].text)
+        A2UIValidator().validate_template(chat_template, CHAT_MESSAGE_SURFACE)
+        assert chat_template[0]["createSurface"]["catalogId"] == CHAT_MESSAGE_SURFACE.catalog_id
+
         tools = await client.list_tools()
-        assert len(tools) == 8
+        assert len(tools) == 9
         for listed_tool in tools:
             json.dumps(listed_tool.input_schema, allow_nan=False)
             assert listed_tool.input_schema.get("additionalProperties") is False
@@ -94,6 +105,26 @@ async def test_a2ui_resource_and_tool_protocol(monkeypatch: pytest.MonkeyPatch) 
             "path",
             "message",
         }
+
+        chat_tool = next(item for item in tools if item.name == "chat_message")
+        assert chat_tool.meta is not None
+        assert chat_tool.meta["ui"] == {
+            "resourceUri": CHAT_MESSAGE_SURFACE.resource_uri,
+            "mimeType": A2UI_MIME_TYPE,
+        }
+        assert chat_tool.annotations is not None
+        assert chat_tool.annotations.read_only_hint is True
+
+        chat_result = await client.call_tool(
+            "chat_message", {"request": {"text": "  Hola, ¿en qué ayudo?  "}}
+        )
+        assert chat_result.is_error is not True
+        embedded = next(item for item in chat_result.content if isinstance(item, EmbeddedResource))
+        assert embedded.resource.mime_type == A2UI_MIME_TYPE
+        update = json.loads(embedded.resource.text)[0]
+        assert update["updateDataModel"]["value"]["message"] == "Hola, ¿en qué ayudo?"
+        text_content = next(item for item in chat_result.content if isinstance(item, TextContent))
+        assert text_content.text == "Hola, ¿en qué ayudo?"
 
         missing_scope = await client.call_tool(
             "select_rows",

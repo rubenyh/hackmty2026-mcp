@@ -18,6 +18,7 @@ from supabase_mcp.a2ui_support.actions import (
     RegisteredAction,
 )
 from supabase_mcp.a2ui_support.constants import (
+    CHAT_MESSAGE_MAX_LENGTH,
     DATABASE_OVERVIEW_DEFAULT_LIMIT,
     REFRESH_DATABASE_OVERVIEW_ACTION,
     REFRESH_DATABASE_OVERVIEW_COMPONENT_ID,
@@ -28,6 +29,7 @@ from supabase_mcp.a2ui_support.mappers import (
 )
 from supabase_mcp.a2ui_support.response import A2UIResponseFactory
 from supabase_mcp.a2ui_support.surfaces import (
+    CHAT_MESSAGE_SURFACE,
     DATA_CHART_SURFACE,
     DATABASE_OVERVIEW_SURFACE,
     SURFACE_REGISTRY,
@@ -61,6 +63,7 @@ A2UIErrorMessage = Annotated[str, Field(max_length=2_000)]
 
 _overview_factory = A2UIResponseFactory(DATABASE_OVERVIEW_SURFACE)
 _chart_factory = A2UIResponseFactory(DATA_CHART_SURFACE)
+_chat_message_factory = A2UIResponseFactory(CHAT_MESSAGE_SURFACE)
 ACTION_REGISTRY = ActionRegistry(SURFACE_REGISTRY)
 
 
@@ -72,6 +75,11 @@ def database_overview_resource() -> str:
 def data_chart_resource() -> str:
     """Return the cached static finance-catalog chart template."""
     return SURFACE_REGISTRY.serialized_template(DATA_CHART_SURFACE)
+
+
+def chat_message_resource() -> str:
+    """Return the cached static chat-message A2UI template."""
+    return SURFACE_REGISTRY.serialized_template(CHAT_MESSAGE_SURFACE)
 
 
 def _overview_tool_result(overview: DatabaseOverview) -> ToolResult:
@@ -146,6 +154,34 @@ async def visualize_allowed_data(
                     "code": "server_error",
                     "message": "The requested data chart could not be generated.",
                 },
+            },
+            is_error=True,
+        )
+
+
+class ChatMessageRequest(BaseModel):
+    """One plain conversational reply to present as an A2UI text surface."""
+
+    text: Annotated[str, Field(min_length=1, max_length=CHAT_MESSAGE_MAX_LENGTH)]
+
+
+async def chat_message(request: ChatMessageRequest) -> ToolResult:
+    """Wrap one drafted conversational reply as a validated A2UI text surface.
+
+    Every final answer must reach the client as A2UI, never as bare text: this
+    is the only tool a plain conversational turn (no chart, no overview) is
+    allowed to end on.
+    """
+    text = request.text.strip()
+    try:
+        return _chat_message_factory.build(fallback_text=text, data_model={"message": text})
+    except Exception as exc:
+        logger.warning("Chat message presentation failed (%s)", type(exc).__name__)
+        return ToolResult(
+            content=[TextContent(text=text)],
+            structured_content={
+                "ok": False,
+                "error": {"code": "server_error", "message": "The message could not be presented."},
             },
             is_error=True,
         )

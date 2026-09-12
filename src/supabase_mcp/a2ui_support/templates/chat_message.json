@@ -1,0 +1,27 @@
+[
+  {
+    "version": "v0.9.1",
+    "createSurface": {
+      "surfaceId": "chat-message",
+      "catalogId": "https://a2ui.org/specification/v0_9_1/catalogs/basic/catalog.json"
+    }
+  },
+  {
+    "version": "v0.9.1",
+    "updateComponents": {
+      "surfaceId": "chat-message",
+      "components": [
+        {
+          "id": "root",
+          "component": "Card",
+          "child": "message_text"
+        },
+        {
+          "id": "message_text",
+          "component": "Text",
+          "text": {"path": "/message"}
+        }
+      ]
+    }
+  }
+]

@@ -66,7 +66,7 @@ class OrderBy(StrictModel):
 
 
 class UserScope(StrictModel):
-    """Canonical demo-user scope supplied by the application, never selected by the model."""
+    """Canonical user scope supplied by the application, never selected by the model."""
 
     user_id: UUID
 

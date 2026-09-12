@@ -51,7 +51,7 @@ class JoinScope:
 
 TableUserScope = DirectScope | JoinScope
 
-# This map mirrors the checked-in demo schema/seed history. Row-returning access to any
+# This map mirrors the checked-in schema history. Row-returning access to any
 # other allowlisted object fails closed until an explicit ownership relationship is added.
 TABLE_USER_SCOPES: dict[tuple[str, str], TableUserScope] = {
     ("public", "users"): DirectScope(column="id"),
@@ -376,19 +376,23 @@ class DatabaseClient:
         return rows, limit, truncated
 
     async def _validate_user_scope(self, connection: AsyncConnection, scope: UserScope) -> None:
+        """Require the scoped id to be a real application user.
+
+        Every signed-up account is mirrored into public.users, so existence in
+        that table is the only membership test: the scope is rejected for an id
+        nobody owns, and accepted for any real user.
+        """
         users = self._objects.get(("public", "users"))
-        if users is None or "id" not in users.table.c or "is_demo" not in users.table.c:
+        if users is None or "id" not in users.table.c:
             raise InvalidSelectionError(
                 "user_scope_not_configured",
                 "User-scoped access is not configured for the requested object.",
             )
         known_user = await connection.scalar(
-            select(
-                exists().where(users.table.c.id == scope.user_id, users.table.c.is_demo.is_(True))
-            )
+            select(exists().where(users.table.c.id == scope.user_id))
         )
         if known_user is not True:
             raise InvalidSelectionError(
                 "unknown_user_id",
-                "The selected demo user is not configured.",
+                "The selected user is not configured.",
             )
