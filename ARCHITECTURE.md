@@ -42,7 +42,7 @@ src/
     server.py         Event-loop setup, FastMCP lifespan, registration, and entry point
     services/
       database_overview.py  Bounded presentation-independent overview use case
-    a2ui/
+    a2ui_support/
       constants.py    v0.9.1, MIME, catalog, action, and stable URI identifiers
       models.py       Immutable SurfaceSpec
       validation.py   Official SDK validation plus local surface invariants
@@ -101,6 +101,18 @@ Unqualified allowlist entries are accepted only when exactly one schema is confi
 FastMCP's lifespan creates one shared `DatabaseClient`, starts it before serving requests, makes it available through the tool context, and disposes it during shutdown. The module preserves the four original tools (`health_check`, `list_allowed_tables`, `describe_table`, and `select_rows`) and adds `database_overview`, `a2ui_action`, and `a2ui_error`. It also publishes the database-overview presentation template as a read-only resource.
 
 `main()` selects stdio unless `MCP_TRANSPORT=http`. HTTP uses the configured host and port; FastMCP exposes its MCP endpoint at `/mcp`. The service itself adds no authentication, authorization middleware, reverse-proxy TLS, rate limiting, or tenant isolation.
+
+Importing `supabase_mcp.server` constructs and registers the module-level `mcp` object but does not call `load_settings()`, create an engine, enter the lifespan, connect to PostgreSQL, or start a transport. This makes package imports and Horizon's file-based inspection safe without build-time secrets. Direct execution remains isolated behind the `if __name__ == "__main__"` guard.
+
+The internal A2UI integration package is named `a2ui_support`, rather than `a2ui`, because FastMCP's file-based loader temporarily places `src/supabase_mcp` on the import path. Reusing the external SDK's top-level name caused `from a2ui...` to resolve to the internal package during `fastmcp inspect`, producing a circular import. The distinct package name keeps file-based and installed-package imports equivalent.
+
+## Packaging and Horizon deployment
+
+Hatchling builds the `src/supabase_mcp` package into the wheel, including the static A2UI JSON template. Runtime imports use the installed `supabase_mcp` package and do not depend on a manually configured `PYTHONPATH`. Python 3.12 satisfies the declared `>=3.11` requirement. Runtime libraries imported by the package are declared in `[project.dependencies]`; test and build tooling remains in the development dependency group.
+
+The sdist target uses an explicit source allowlist. This prevents local virtual environments, build directories, `.env`, caches, and other untracked workstation files from being copied into release artifacts. Horizon generates its own runtime image from `pyproject.toml`, so the repository `Dockerfile` is not part of this deployment path and remains unchanged.
+
+Horizon must use the repository directory containing `pyproject.toml` as its project root, Python 3.12, `pyproject.toml` as its dependency file, and `src/supabase_mcp/server.py:mcp` as its entrypoint. `SUPABASE_DATABASE_URL` is injected at runtime. `MCP_ALLOWED_TABLES` stays deny-all when empty; deployments that expose data must configure it explicitly, and should explicitly configure `MCP_ALLOWED_SCHEMAS` as well. Horizon owns the hosted transport and does not invoke `main()`.
 
 ## Database lifecycle and least privilege
 
@@ -191,6 +203,7 @@ The offline tests use FastMCP's in-memory client and an empty deny-all allowlist
 - **2026-09-11:** Added the demo banking schema (`users`, `accessibility_preferences`, `accounts`, `transactions`, `subscriptions`) with RLS, a dedicated `mcp_reader` role, and `scripts/seed_demo_data.py` for the initial FluidBank orchestrator integration.
 - **2026-09-11:** Added compositional A2UI v0.9.1 support for a bounded database overview, including a packaged resource template, SDK-backed validation, reusable response factory, explicit read-only action registry, safe error acknowledgements, protocol tests, and non-A2UI fallbacks.
 - **2026-09-12:** Added `transfers` (simulated self-account transfers, trigger-enforced same-user constraint) and the `monthly_cash_flow` view (income/expenses/net per account per month) to represent transfers and cash flow explicitly. `MCP_ALLOWED_TABLES` must include `public.transfers,public.monthly_cash_flow` for either to be reachable through the server - update this on every deployment (including the Horizon instance), not just locally.
+- **2026-09-12:** Made the file-based Horizon entrypoint import-safe by removing the internal/external `a2ui` package-name collision (renamed to `a2ui_support`), constrained sdist contents, and added package-import and `fastmcp inspect` regressions that run without runtime secrets.
 
 ## Documentation maintenance
 

@@ -2243,7 +2243,9 @@ source = { editable = "." }
 dependencies = [
     { name = "a2ui-agent-sdk" },
     { name = "fastmcp" },
+    { name = "mcp" },
     { name = "psycopg", extra = ["binary", "pool"] },
+    { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "sqlalchemy", extra = ["asyncio"] },
 ]
@@ -2261,7 +2263,9 @@ dev = [
 requires-dist = [
     { name = "a2ui-agent-sdk", specifier = ">=0.5,<0.6" },
     { name = "fastmcp", specifier = ">=4.0.3,<5" },
+    { name = "mcp", specifier = ">=2.2,<3" },
     { name = "psycopg", extras = ["binary", "pool"], specifier = ">=3.2.10,<4" },
+    { name = "pydantic", specifier = ">=2.10,<3" },
     { name = "pydantic-settings", specifier = ">=2.10,<3" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.43,<3" },
 ]

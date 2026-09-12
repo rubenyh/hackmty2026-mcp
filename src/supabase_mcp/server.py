@@ -16,9 +16,9 @@ from fastmcp import FastMCP
 from fastmcp.server.lifespan import lifespan
 from mcp.types import ToolAnnotations
 
-from supabase_mcp.a2ui.constants import A2UI_MIME_TYPE
-from supabase_mcp.a2ui.response import ui_metadata
-from supabase_mcp.a2ui.surfaces import DATABASE_OVERVIEW_SURFACE
+from supabase_mcp.a2ui_support.constants import A2UI_MIME_TYPE
+from supabase_mcp.a2ui_support.response import ui_metadata
+from supabase_mcp.a2ui_support.surfaces import DATABASE_OVERVIEW_SURFACE
 from supabase_mcp.config import Settings
 from supabase_mcp.database import DatabaseClient
 from supabase_mcp.tools import (

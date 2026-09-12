@@ -9,9 +9,9 @@ from typing import Any
 
 from hatchling.build import build_wheel
 
-from supabase_mcp.a2ui.constants import A2UI_BASIC_CATALOG, A2UI_VERSION
-from supabase_mcp.a2ui.mappers import database_overview_data_model
-from supabase_mcp.a2ui.surfaces import DATABASE_OVERVIEW_SURFACE, SURFACE_REGISTRY
+from supabase_mcp.a2ui_support.constants import A2UI_BASIC_CATALOG, A2UI_VERSION
+from supabase_mcp.a2ui_support.mappers import database_overview_data_model
+from supabase_mcp.a2ui_support.surfaces import DATABASE_OVERVIEW_SURFACE, SURFACE_REGISTRY
 from supabase_mcp.models import AllowedObject
 from supabase_mcp.services.database_overview import DatabaseOverview
 
@@ -57,4 +57,4 @@ def test_database_overview_template_is_valid_and_bound() -> None:
 def test_database_overview_template_is_in_wheel(tmp_path: Path) -> None:
     wheel_name = build_wheel(str(tmp_path))
     with zipfile.ZipFile(tmp_path / wheel_name) as wheel:
-        assert "supabase_mcp/a2ui/templates/database_overview.json" in wheel.namelist()
+        assert "supabase_mcp/a2ui_support/templates/database_overview.json" in wheel.namelist()

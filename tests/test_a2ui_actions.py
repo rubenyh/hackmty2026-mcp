@@ -7,7 +7,7 @@ import logging
 import pytest
 from pydantic import SecretStr
 
-from supabase_mcp.a2ui.constants import (
+from supabase_mcp.a2ui_support.constants import (
     DATABASE_OVERVIEW_SURFACE_ID,
     REFRESH_DATABASE_OVERVIEW_ACTION,
     REFRESH_DATABASE_OVERVIEW_COMPONENT_ID,
@@ -54,7 +54,7 @@ async def test_registered_refresh_action_returns_a2ui_result() -> None:
 async def test_action_registry_rejects_unsafe_dispatch(
     overrides: dict[str, object], code: str
 ) -> None:
-    from supabase_mcp.a2ui.actions import ActionDispatchError
+    from supabase_mcp.a2ui_support.actions import ActionDispatchError
 
     arguments: dict[str, object] = {
         "name": REFRESH_DATABASE_OVERVIEW_ACTION,

@@ -7,12 +7,12 @@ from collections.abc import Mapping
 from importlib.resources import files
 from typing import Any
 
-from supabase_mcp.a2ui.constants import (
+from supabase_mcp.a2ui_support.constants import (
     DATABASE_OVERVIEW_RESOURCE_URI,
     DATABASE_OVERVIEW_SURFACE_ID,
 )
-from supabase_mcp.a2ui.models import SurfaceSpec
-from supabase_mcp.a2ui.validation import A2UIValidationError, A2UIValidator
+from supabase_mcp.a2ui_support.models import SurfaceSpec
+from supabase_mcp.a2ui_support.validation import A2UIValidationError, A2UIValidator
 
 
 class SurfaceRegistry:
@@ -31,7 +31,7 @@ class SurfaceRegistry:
         if surface.resource_uri in self._by_uri:
             raise A2UIValidationError(f"Duplicate A2UI resource URI: {surface.resource_uri}")
 
-        template_file = files("supabase_mcp.a2ui.templates").joinpath(surface.template_name)
+        template_file = files("supabase_mcp.a2ui_support.templates").joinpath(surface.template_name)
         if not template_file.is_file():
             raise A2UIValidationError(f"A2UI template does not exist: {surface.template_name}")
         try:
