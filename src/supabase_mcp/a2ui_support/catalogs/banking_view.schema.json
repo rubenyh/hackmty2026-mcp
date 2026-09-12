@@ -1,0 +1,1510 @@
+{
+  "$id": "https://fluidbank.app/a2ui/catalogs/finance/v2/banking-view.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "anyOf": [
+    {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "subtitle": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 600
+            },
+            "currency": {
+              "default": "MXN",
+              "type": "string",
+              "enum": [
+                "MXN",
+                "USD"
+              ]
+            },
+            "intent": {
+              "type": "string",
+              "const": "financial-summary"
+            },
+            "totalOwnedBalance": {
+              "type": "number",
+              "minimum": -1000000000000,
+              "maximum": 1000000000000
+            },
+            "accounts": {
+              "maxItems": 30,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "accountId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "accountName": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "accountType": {
+                    "type": "string",
+                    "enum": [
+                      "checking",
+                      "savings",
+                      "credit"
+                    ]
+                  },
+                  "accountLastFour": {
+                    "type": "string",
+                    "pattern": "^\\d{4}$"
+                  },
+                  "availableBalance": {
+                    "type": "number",
+                    "minimum": -1000000000000,
+                    "maximum": 1000000000000
+                  },
+                  "status": {
+                    "default": "active",
+                    "type": "string",
+                    "enum": [
+                      "active",
+                      "blocked",
+                      "inactive"
+                    ]
+                  }
+                },
+                "required": [
+                  "accountId",
+                  "accountName",
+                  "accountType",
+                  "availableBalance"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "income": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1000000000000
+            },
+            "expenses": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1000000000000
+            }
+          },
+          "required": [
+            "title",
+            "intent",
+            "totalOwnedBalance",
+            "accounts"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "subtitle": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 600
+            },
+            "currency": {
+              "default": "MXN",
+              "type": "string",
+              "enum": [
+                "MXN",
+                "USD"
+              ]
+            },
+            "intent": {
+              "type": "string",
+              "const": "transactions"
+            },
+            "startDate": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            },
+            "endDate": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            },
+            "timeZone": {
+              "type": "string",
+              "const": "America/Monterrey"
+            },
+            "transactions": {
+              "maxItems": 100,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "transactionId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "description": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 600
+                  },
+                  "amount": {
+                    "type": "number",
+                    "minimum": -1000000000000,
+                    "maximum": 1000000000000
+                  },
+                  "occurredAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                  },
+                  "category": {
+                    "type": "string",
+                    "enum": [
+                      "food",
+                      "transport",
+                      "entertainment",
+                      "utilities",
+                      "health",
+                      "shopping",
+                      "income",
+                      "transfer",
+                      "other"
+                    ]
+                  },
+                  "status": {
+                    "default": "completed",
+                    "type": "string",
+                    "enum": [
+                      "pending",
+                      "completed",
+                      "declined"
+                    ]
+                  }
+                },
+                "required": [
+                  "transactionId",
+                  "title",
+                  "amount",
+                  "occurredAt",
+                  "category"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "title",
+            "intent",
+            "startDate",
+            "endDate",
+            "timeZone",
+            "transactions"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "subtitle": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 600
+            },
+            "currency": {
+              "default": "MXN",
+              "type": "string",
+              "enum": [
+                "MXN",
+                "USD"
+              ]
+            },
+            "intent": {
+              "type": "string",
+              "const": "spending-analysis"
+            },
+            "totalSpent": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1000000000000
+            },
+            "categories": {
+              "maxItems": 8,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "category": {
+                    "type": "string",
+                    "enum": [
+                      "food",
+                      "transport",
+                      "entertainment",
+                      "utilities",
+                      "health",
+                      "shopping",
+                      "transfer",
+                      "other"
+                    ]
+                  },
+                  "amount": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1000000000000
+                  }
+                },
+                "required": [
+                  "category",
+                  "amount"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "previousTotal": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1000000000000
+            },
+            "insight": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 600
+            },
+            "trend": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string",
+                  "maxLength": 100
+                },
+                "subtitle": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "data": {
+                  "maxItems": 240,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "label": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 80
+                      },
+                      "values": {
+                        "minItems": 1,
+                        "maxItems": 4,
+                        "type": "array",
+                        "items": {
+                          "type": "number",
+                          "minimum": -1000000000000000,
+                          "maximum": 1000000000000000
+                        }
+                      }
+                    },
+                    "required": [
+                      "label",
+                      "values"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "series": {
+                  "minItems": 1,
+                  "maxItems": 4,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64,
+                        "pattern": "^[A-Za-z][A-Za-z0-9._:-]*$"
+                      },
+                      "label": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 80
+                      },
+                      "tone": {
+                        "type": "string",
+                        "enum": [
+                          "blue",
+                          "violet",
+                          "green",
+                          "orange"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "label"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "height": {
+                  "type": "number",
+                  "minimum": 180,
+                  "maximum": 500
+                },
+                "currency": {
+                  "type": "string",
+                  "enum": [
+                    "MXN",
+                    "USD"
+                  ]
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "ready",
+                    "loading"
+                  ]
+                }
+              },
+              "required": [
+                "data",
+                "series"
+              ],
+              "additionalProperties": false
+            },
+            "activity": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string",
+                  "maxLength": 100
+                },
+                "subtitle": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "data": {
+                  "maxItems": 4000,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "date": {
+                        "type": "string",
+                        "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                      },
+                      "value": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1000000000000000
+                      }
+                    },
+                    "required": [
+                      "date",
+                      "value"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "initialDate": {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                },
+                "initialView": {
+                  "type": "string",
+                  "enum": [
+                    "year",
+                    "month",
+                    "week"
+                  ]
+                },
+                "tone": {
+                  "type": "string",
+                  "enum": [
+                    "green",
+                    "blue",
+                    "violet",
+                    "orange"
+                  ]
+                },
+                "currency": {
+                  "type": "string",
+                  "enum": [
+                    "MXN",
+                    "USD"
+                  ]
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "ready",
+                    "loading"
+                  ]
+                }
+              },
+              "required": [
+                "data"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "title",
+            "intent",
+            "totalSpent",
+            "categories"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "subtitle": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 600
+            },
+            "currency": {
+              "default": "MXN",
+              "type": "string",
+              "enum": [
+                "MXN",
+                "USD"
+              ]
+            },
+            "intent": {
+              "type": "string",
+              "const": "cash-flow"
+            },
+            "projectedBalance": {
+              "type": "number",
+              "minimum": -1000000000000,
+              "maximum": 1000000000000
+            },
+            "targetDate": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            },
+            "assumptions": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 600
+            },
+            "projection": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string",
+                  "maxLength": 100
+                },
+                "subtitle": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "data": {
+                  "maxItems": 240,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "label": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 80
+                      },
+                      "values": {
+                        "minItems": 1,
+                        "maxItems": 4,
+                        "type": "array",
+                        "items": {
+                          "type": "number",
+                          "minimum": -1000000000000000,
+                          "maximum": 1000000000000000
+                        }
+                      }
+                    },
+                    "required": [
+                      "label",
+                      "values"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "series": {
+                  "minItems": 1,
+                  "maxItems": 4,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64,
+                        "pattern": "^[A-Za-z][A-Za-z0-9._:-]*$"
+                      },
+                      "label": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 80
+                      },
+                      "tone": {
+                        "type": "string",
+                        "enum": [
+                          "blue",
+                          "violet",
+                          "green",
+                          "orange"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "label"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "height": {
+                  "type": "number",
+                  "minimum": 180,
+                  "maximum": 500
+                },
+                "currency": {
+                  "type": "string",
+                  "enum": [
+                    "MXN",
+                    "USD"
+                  ]
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "ready",
+                    "loading"
+                  ]
+                }
+              },
+              "required": [
+                "data",
+                "series"
+              ],
+              "additionalProperties": false
+            },
+            "upcoming": {
+              "maxItems": 30,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "date": {
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                  },
+                  "amount": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1000000000000
+                  },
+                  "direction": {
+                    "type": "string",
+                    "enum": [
+                      "income",
+                      "expense"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "date",
+                  "amount",
+                  "direction"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "title",
+            "intent",
+            "projectedBalance",
+            "targetDate",
+            "assumptions",
+            "projection",
+            "upcoming"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "subtitle": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 600
+            },
+            "currency": {
+              "default": "MXN",
+              "type": "string",
+              "enum": [
+                "MXN",
+                "USD"
+              ]
+            },
+            "intent": {
+              "type": "string",
+              "const": "budgets"
+            },
+            "budgets": {
+              "maxItems": 30,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "spent": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1000000000000
+                  },
+                  "limit": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "maximum": 1000000000000
+                  },
+                  "period": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "active",
+                      "paused"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "spent",
+                  "limit",
+                  "period",
+                  "status"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "title",
+            "intent",
+            "budgets"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "subtitle": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 600
+            },
+            "currency": {
+              "default": "MXN",
+              "type": "string",
+              "enum": [
+                "MXN",
+                "USD"
+              ]
+            },
+            "intent": {
+              "type": "string",
+              "const": "recurring-payments"
+            },
+            "payments": {
+              "maxItems": 30,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "amount": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1000000000000
+                  },
+                  "nextDate": {
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                  },
+                  "cycle": {
+                    "type": "string",
+                    "enum": [
+                      "weekly",
+                      "monthly",
+                      "yearly"
+                    ]
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "active",
+                      "paused"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "amount",
+                  "nextDate",
+                  "cycle",
+                  "status"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "title",
+            "intent",
+            "payments"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "subtitle": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 600
+            },
+            "currency": {
+              "default": "MXN",
+              "type": "string",
+              "enum": [
+                "MXN",
+                "USD"
+              ]
+            },
+            "intent": {
+              "type": "string",
+              "const": "credit-card"
+            },
+            "cardName": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "lastFour": {
+              "type": "string",
+              "pattern": "^\\d{4}$"
+            },
+            "debt": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1000000000000
+            },
+            "availableCredit": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1000000000000
+            },
+            "minimumPayment": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1000000000000
+            },
+            "interestFreePayment": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1000000000000
+            },
+            "dueDate": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            }
+          },
+          "required": [
+            "title",
+            "intent",
+            "cardName",
+            "debt",
+            "availableCredit",
+            "minimumPayment",
+            "interestFreePayment",
+            "dueDate"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "subtitle": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 600
+            },
+            "currency": {
+              "default": "MXN",
+              "type": "string",
+              "enum": [
+                "MXN",
+                "USD"
+              ]
+            },
+            "intent": {
+              "type": "string",
+              "const": "debts"
+            },
+            "outstanding": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1000000000000
+            },
+            "assumptions": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 600
+            },
+            "scenarios": {
+              "minItems": 1,
+              "maxItems": 4,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "monthlyPayment": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1000000000000
+                  },
+                  "months": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 600
+                  },
+                  "totalInterest": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1000000000000
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "monthlyPayment",
+                  "months",
+                  "totalInterest"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "title",
+            "intent",
+            "outstanding",
+            "assumptions",
+            "scenarios"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "subtitle": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 600
+            },
+            "currency": {
+              "default": "MXN",
+              "type": "string",
+              "enum": [
+                "MXN",
+                "USD"
+              ]
+            },
+            "intent": {
+              "type": "string",
+              "const": "transfers"
+            },
+            "source": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "recipient": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "amount": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 1000000000000
+            },
+            "fee": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1000000000000
+            },
+            "scheduledDate": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            }
+          },
+          "required": [
+            "title",
+            "intent",
+            "source",
+            "recipient",
+            "amount",
+            "fee"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "subtitle": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 600
+            },
+            "currency": {
+              "default": "MXN",
+              "type": "string",
+              "enum": [
+                "MXN",
+                "USD"
+              ]
+            },
+            "intent": {
+              "type": "string",
+              "const": "card-security"
+            },
+            "cardName": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "lastFour": {
+              "type": "string",
+              "pattern": "^\\d{4}$"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "active",
+                "blocked",
+                "inactive"
+              ]
+            },
+            "reportedTransaction": {
+              "type": "object",
+              "properties": {
+                "transactionId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "title": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 120
+                },
+                "description": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 600
+                },
+                "amount": {
+                  "type": "number",
+                  "minimum": -1000000000000,
+                  "maximum": 1000000000000
+                },
+                "occurredAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                },
+                "category": {
+                  "type": "string",
+                  "enum": [
+                    "food",
+                    "transport",
+                    "entertainment",
+                    "utilities",
+                    "health",
+                    "shopping",
+                    "income",
+                    "transfer",
+                    "other"
+                  ]
+                },
+                "status": {
+                  "default": "completed",
+                  "type": "string",
+                  "enum": [
+                    "pending",
+                    "completed",
+                    "declined"
+                  ]
+                }
+              },
+              "required": [
+                "transactionId",
+                "title",
+                "amount",
+                "occurredAt",
+                "category"
+              ],
+              "additionalProperties": false
+            },
+            "guidance": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 600
+            }
+          },
+          "required": [
+            "title",
+            "intent",
+            "cardName",
+            "status",
+            "guidance"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "subtitle": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 600
+            },
+            "currency": {
+              "default": "MXN",
+              "type": "string",
+              "enum": [
+                "MXN",
+                "USD"
+              ]
+            },
+            "intent": {
+              "type": "string",
+              "const": "savings-goals"
+            },
+            "goals": {
+              "maxItems": 30,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "saved": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1000000000000
+                  },
+                  "target": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "maximum": 1000000000000
+                  },
+                  "targetDate": {
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                  },
+                  "monthlyContribution": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1000000000000
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "saved",
+                  "target",
+                  "targetDate",
+                  "monthlyContribution"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "title",
+            "intent",
+            "goals"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "subtitle": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 600
+            },
+            "currency": {
+              "default": "MXN",
+              "type": "string",
+              "enum": [
+                "MXN",
+                "USD"
+              ]
+            },
+            "intent": {
+              "type": "string",
+              "const": "banking-information"
+            },
+            "bankName": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "holder": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "maskedClabe": {
+              "type": "string",
+              "pattern": "^[•*]{14}\\d{4}$"
+            },
+            "documents": {
+              "maxItems": 30,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "period": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "available",
+                      "processing"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "period",
+                  "status"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "title",
+            "intent",
+            "bankName",
+            "holder",
+            "documents"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "subtitle": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 600
+            },
+            "currency": {
+              "default": "MXN",
+              "type": "string",
+              "enum": [
+                "MXN",
+                "USD"
+              ]
+            },
+            "intent": {
+              "type": "string",
+              "const": "financial-education"
+            },
+            "concept": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "explanation": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 600
+            },
+            "takeaways": {
+              "minItems": 1,
+              "maxItems": 5,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 600
+              }
+            },
+            "scenarios": {
+              "maxItems": 4,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "monthlyPayment": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1000000000000
+                  },
+                  "months": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 600
+                  },
+                  "totalInterest": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1000000000000
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "monthlyPayment",
+                  "months",
+                  "totalInterest"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "title",
+            "intent",
+            "concept",
+            "explanation",
+            "takeaways"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "subtitle": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 600
+        },
+        "currency": {
+          "default": "MXN",
+          "type": "string",
+          "enum": [
+            "MXN",
+            "USD"
+          ]
+        },
+        "intent": {
+          "type": "string",
+          "enum": [
+            "financial-summary",
+            "transactions",
+            "spending-analysis",
+            "cash-flow",
+            "budgets",
+            "recurring-payments",
+            "credit-card",
+            "debts",
+            "transfers",
+            "card-security",
+            "savings-goals",
+            "banking-information",
+            "financial-education"
+          ]
+        },
+        "state": {
+          "type": "string",
+          "const": "empty"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 600
+        }
+      },
+      "required": [
+        "title",
+        "intent",
+        "state",
+        "description"
+      ],
+      "additionalProperties": false
+    }
+  ]
+}

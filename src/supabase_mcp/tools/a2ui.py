@@ -12,14 +12,18 @@ from pydantic import BaseModel, Field
 from sqlalchemy.exc import SQLAlchemyError
 
 from supabase_mcp.a2ui_support.actions import (
+    A2UIActionCall,
     ActionDispatchError,
     ActionRegistry,
     RefreshDatabaseOverviewContext,
     RegisteredAction,
+    RequestFinancialViewContext,
 )
 from supabase_mcp.a2ui_support.constants import (
     CHAT_MESSAGE_MAX_LENGTH,
     DATABASE_OVERVIEW_DEFAULT_LIMIT,
+    PRESENT_FINANCIAL_VIEW_ACTION,
+    PRESENT_FINANCIAL_VIEW_COMPONENT_ID,
     REFRESH_DATABASE_OVERVIEW_ACTION,
     REFRESH_DATABASE_OVERVIEW_COMPONENT_ID,
 )
@@ -32,11 +36,13 @@ from supabase_mcp.a2ui_support.surfaces import (
     CHAT_MESSAGE_SURFACE,
     DATA_CHART_SURFACE,
     DATABASE_OVERVIEW_SURFACE,
+    FINANCIAL_VIEW_SURFACE,
     SURFACE_REGISTRY,
 )
+from supabase_mcp.a2ui_support.validation import A2UIValidationError, A2UIValidator
 from supabase_mcp.database import DatabaseClient
 from supabase_mcp.errors import InvalidSelectionError
-from supabase_mcp.models import VisualizeAllowedDataRequest
+from supabase_mcp.models import FinancialSurfaceRequest, UserScope, VisualizeAllowedDataRequest
 from supabase_mcp.services.data_chart import (
     ChartMappingError,
     chart_data_model,
@@ -64,6 +70,8 @@ A2UIErrorMessage = Annotated[str, Field(max_length=2_000)]
 _overview_factory = A2UIResponseFactory(DATABASE_OVERVIEW_SURFACE)
 _chart_factory = A2UIResponseFactory(DATA_CHART_SURFACE)
 _chat_message_factory = A2UIResponseFactory(CHAT_MESSAGE_SURFACE)
+_financial_view_factory = A2UIResponseFactory(FINANCIAL_VIEW_SURFACE)
+_a2ui_validator = A2UIValidator()
 ACTION_REGISTRY = ActionRegistry(SURFACE_REGISTRY)
 
 
@@ -80,6 +88,11 @@ def data_chart_resource() -> str:
 def chat_message_resource() -> str:
     """Return the cached static chat-message A2UI template."""
     return SURFACE_REGISTRY.serialized_template(CHAT_MESSAGE_SURFACE)
+
+
+def financial_view_resource() -> str:
+    """Return the cached stable Finance v2 BankingView composition."""
+    return SURFACE_REGISTRY.serialized_template(FINANCIAL_VIEW_SURFACE)
 
 
 def _overview_tool_result(overview: DatabaseOverview) -> ToolResult:
@@ -159,6 +172,39 @@ async def visualize_allowed_data(
         )
 
 
+async def present_financial_view(request: FinancialSurfaceRequest) -> ToolResult:
+    """Validate and present one semantic Finance v2 BankingView surface."""
+    try:
+        _a2ui_validator.validate_banking_view(request.view)
+        title = request.view.get("title")
+        if not isinstance(title, str):
+            raise A2UIValidationError("BankingView title must be a string")
+        data_model = {
+            "view": request.view,
+            "actionLabel": request.action_label,
+            "requestIntent": request.request_intent.value,
+        }
+        return _financial_view_factory.build(
+            fallback_text=title,
+            data_model=data_model,
+            structured_content={
+                "ok": True,
+                "surfaceId": FINANCIAL_VIEW_SURFACE.surface_id,
+                **data_model,
+            },
+        )
+    except A2UIValidationError:
+        message = "The financial view does not match the Finance v2 contract."
+        return ToolResult(
+            content=[TextContent(text=message)],
+            structured_content={
+                "ok": False,
+                "error": {"code": "invalid_financial_view", "message": message},
+            },
+            is_error=True,
+        )
+
+
 class ChatMessageRequest(BaseModel):
     """One plain conversational reply to present as an A2UI text surface."""
 
@@ -187,10 +233,36 @@ async def chat_message(request: ChatMessageRequest) -> ToolResult:
         )
 
 
-async def _refresh_database_overview(context: BaseModel, database: DatabaseClient) -> ToolResult:
+async def _refresh_database_overview(
+    _call: A2UIActionCall,
+    context: BaseModel,
+    _trusted_scope: UserScope | None,
+    database: DatabaseClient,
+) -> ToolResult:
     if not isinstance(context, RefreshDatabaseOverviewContext):
         raise ActionDispatchError("invalid_action_context", "The A2UI action context is invalid.")
     return _overview_tool_result(get_database_overview(database, context.limit))
+
+
+async def _request_financial_view(
+    call: A2UIActionCall,
+    context: BaseModel,
+    trusted_scope: UserScope | None,
+    _database_client: DatabaseClient,
+) -> ToolResult:
+    if not isinstance(context, RequestFinancialViewContext) or trusted_scope is None:
+        raise ActionDispatchError("invalid_action_context", "The A2UI action context is invalid.")
+    request = context.model_dump(mode="json", by_alias=True, exclude_none=True)
+    normalized = {
+        "ok": True,
+        "action": call.model_dump(mode="json", by_alias=True),
+        "request": request,
+        "trustedScope": trusted_scope.model_dump(mode="json", by_alias=True),
+    }
+    return ToolResult(
+        content=[TextContent(text=f"Requested financial view: {context.intent.value}.")],
+        structured_content=normalized,
+    )
 
 
 ACTION_REGISTRY.register(
@@ -202,6 +274,16 @@ ACTION_REGISTRY.register(
         handler=_refresh_database_overview,
     )
 )
+ACTION_REGISTRY.register(
+    RegisteredAction(
+        name=PRESENT_FINANCIAL_VIEW_ACTION,
+        surface_id=FINANCIAL_VIEW_SURFACE.surface_id,
+        source_component_id=PRESENT_FINANCIAL_VIEW_COMPONENT_ID,
+        context_model=RequestFinancialViewContext,
+        handler=_request_financial_view,
+        requires_trusted_scope=True,
+    )
+)
 
 
 async def a2ui_action(
@@ -211,6 +293,7 @@ async def a2ui_action(
     timestamp: A2UITimestamp,
     context: dict[str, Any],
     ctx: Context,
+    trustedScope: UserScope | None = None,
 ) -> ToolResult:
     """Dispatch one allowlisted, read-only A2UI user action."""
     try:
@@ -221,6 +304,7 @@ async def a2ui_action(
             timestamp=timestamp,
             context=context,
             database=_database(ctx),
+            trusted_scope=trustedScope,
         )
     except ActionDispatchError as exc:
         logger.info("A2UI action rejected code=%s", exc.code)

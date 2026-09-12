@@ -8,6 +8,8 @@ from supabase_mcp.tools.a2ui import (
     data_chart_resource,
     database_overview,
     database_overview_resource,
+    financial_view_resource,
+    present_financial_view,
     visualize_allowed_data,
 )
 from supabase_mcp.tools.health import health_check
@@ -23,8 +25,10 @@ __all__ = [
     "database_overview",
     "database_overview_resource",
     "describe_table",
+    "financial_view_resource",
     "health_check",
     "list_allowed_tables",
+    "present_financial_view",
     "select_rows",
     "visualize_allowed_data",
 ]

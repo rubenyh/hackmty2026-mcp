@@ -16,6 +16,7 @@ from a2ui.schema.catalog_provider import A2uiCatalogProvider  # type: ignore[imp
 from supabase_mcp.a2ui_support.constants import (
     A2UI_BASIC_CATALOG,
     A2UI_FINANCE_CATALOG,
+    A2UI_FINANCE_V2_CATALOG,
     A2UI_SDK_VERSION,
     A2UI_VERSION,
 )
@@ -65,6 +66,64 @@ class CatalogRegistry:
             raise CatalogRegistrationError("A packaged A2UI catalog has an unexpected identifier")
         config = CatalogConfig(name=name, provider=_MappingCatalogProvider(schema))
         self._register(catalog_id, config, schema)
+
+    def register_finance_v2(self) -> None:
+        """Build Finance v2 from Finance v1 plus the canonical BankingView schema."""
+        base = self._load_packaged_json("finance_v1.json")
+        banking_view = self._load_packaged_json("banking_view.schema.json")
+        banking_view.pop("$schema", None)
+        banking_view.pop("$id", None)
+
+        schema = deepcopy(base)
+        schema["$id"] = A2UI_FINANCE_V2_CATALOG
+        schema["catalogId"] = A2UI_FINANCE_V2_CATALOG
+        schema["title"] = "Fluidbank Finance Catalog v2"
+        schema["description"] = "A bounded A2UI v0.9.1 catalog for semantic financial surfaces."
+        schema["components"]["BankingView"] = {
+            "type": "object",
+            "allOf": [
+                {
+                    "$ref": (
+                        "https://a2ui.org/specification/v0_9/common_types.json"
+                        "#/$defs/ComponentCommon"
+                    )
+                },
+                {"$ref": "#/$defs/CatalogComponentCommon"},
+                {
+                    "type": "object",
+                    "properties": {
+                        "component": {"const": "BankingView"},
+                        "view": {
+                            "oneOf": [
+                                {"$ref": "#/$defs/DataBinding"},
+                                banking_view,
+                            ]
+                        },
+                    },
+                    "required": ["component", "view"],
+                },
+            ],
+            "unevaluatedProperties": False,
+        }
+        schema["$defs"]["anyComponent"]["oneOf"].append({"$ref": "#/components/BankingView"})
+        config = CatalogConfig(
+            name="fluidbank-finance-v2",
+            provider=_MappingCatalogProvider(schema),
+        )
+        self._register(A2UI_FINANCE_V2_CATALOG, config, schema)
+
+    @staticmethod
+    def _load_packaged_json(resource_name: str) -> dict[str, Any]:
+        resource = files("supabase_mcp.a2ui_support.catalogs").joinpath(resource_name)
+        if not resource.is_file():
+            raise CatalogRegistrationError("A packaged A2UI catalog is missing")
+        try:
+            loaded = json.loads(resource.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise CatalogRegistrationError("A packaged A2UI catalog could not be loaded") from exc
+        if not isinstance(loaded, Mapping):
+            raise CatalogRegistrationError("A packaged A2UI catalog must be an object")
+        return dict(loaded)
 
     def _register(
         self,
@@ -131,3 +190,4 @@ CATALOG_REGISTRY.register_packaged(
     resource_name="finance_v1.json",
     name="fluidbank-finance-v1",
 )
+CATALOG_REGISTRY.register_finance_v2()

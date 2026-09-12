@@ -33,6 +33,24 @@ class OrderDirection(StrEnum):
     DESC = "desc"
 
 
+class FinancialIntent(StrEnum):
+    """The bounded semantic intents supported by Finance v2 BankingView."""
+
+    FINANCIAL_SUMMARY = "financial-summary"
+    TRANSACTIONS = "transactions"
+    SPENDING_ANALYSIS = "spending-analysis"
+    CASH_FLOW = "cash-flow"
+    BUDGETS = "budgets"
+    RECURRING_PAYMENTS = "recurring-payments"
+    CREDIT_CARD = "credit-card"
+    DEBTS = "debts"
+    TRANSFERS = "transfers"
+    CARD_SECURITY = "card-security"
+    SAVINGS_GOALS = "savings-goals"
+    BANKING_INFORMATION = "banking-information"
+    FINANCIAL_EDUCATION = "financial-education"
+
+
 JsonScalar: TypeAlias = str | int | float | bool | None
 JsonScalarList: TypeAlias = Annotated[list[JsonScalar], Field(min_length=1, max_length=100)]
 FilterValue: TypeAlias = JsonScalar | JsonScalarList
@@ -69,6 +87,14 @@ class UserScope(StrictModel):
     """Canonical user scope supplied by the application, never selected by the model."""
 
     user_id: UUID
+
+
+class FinancialSurfaceRequest(StrictModel):
+    """One semantic BankingView plus a stable, bounded follow-up action."""
+
+    view: dict[str, Any]
+    action_label: str = Field(alias="actionLabel", min_length=1, max_length=120)
+    request_intent: FinancialIntent = Field(alias="requestIntent")
 
 
 class SelectRequest(StrictModel):

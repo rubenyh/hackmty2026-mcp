@@ -19,12 +19,14 @@ from supabase_mcp.a2ui_support.catalog_registry import (
 from supabase_mcp.a2ui_support.constants import (
     A2UI_BASIC_CATALOG,
     A2UI_FINANCE_CATALOG,
+    A2UI_FINANCE_V2_CATALOG,
     A2UI_VERSION,
 )
 from supabase_mcp.a2ui_support.mappers import database_overview_data_model
 from supabase_mcp.a2ui_support.surfaces import (
     DATA_CHART_SURFACE,
     DATABASE_OVERVIEW_SURFACE,
+    FINANCIAL_VIEW_SURFACE,
     SURFACE_REGISTRY,
 )
 from supabase_mcp.models import AllowedObject
@@ -75,6 +77,8 @@ def test_database_overview_template_is_in_wheel(tmp_path: Path) -> None:
         assert "supabase_mcp/a2ui_support/templates/database_overview.json" in wheel.namelist()
         assert "supabase_mcp/a2ui_support/templates/data_chart.json" in wheel.namelist()
         assert "supabase_mcp/a2ui_support/catalogs/finance_v1.json" in wheel.namelist()
+        assert "supabase_mcp/a2ui_support/catalogs/banking_view.schema.json" in wheel.namelist()
+        assert "supabase_mcp/a2ui_support/templates/financial_view.json" in wheel.namelist()
 
 
 def test_finance_catalog_and_chart_template_are_valid() -> None:
@@ -97,6 +101,32 @@ def test_finance_catalog_and_chart_template_are_valid() -> None:
         "Chart",
     }
 
+    finance_v2 = CATALOG_REGISTRY.schema(A2UI_FINANCE_V2_CATALOG)
+    assert finance_v2 is not None
+    assert set(finance_v2["components"]) == {
+        "Text",
+        "Button",
+        "Card",
+        "Column",
+        "Chart",
+        "BankingView",
+    }
+    financial_components = SURFACE_REGISTRY.template(FINANCIAL_VIEW_SURFACE)[1]["updateComponents"][
+        "components"
+    ]
+    assert [component["id"] for component in financial_components] == [
+        "root",
+        "banking_view",
+        "request_financial_view_label",
+        "request_financial_view_button",
+    ]
+    assert {component["component"] for component in financial_components} == {
+        "Column",
+        "BankingView",
+        "Text",
+        "Button",
+    }
+
 
 def test_duplicate_and_unknown_catalogs_are_rejected() -> None:
     registry = CatalogRegistry()
@@ -112,4 +142,8 @@ def test_catalog_and_template_are_in_sdist(tmp_path: Path) -> None:
     with tarfile.open(tmp_path / archive_name, "r:gz") as archive:
         names = archive.getnames()
         assert any(name.endswith("/a2ui_support/catalogs/finance_v1.json") for name in names)
+        assert any(
+            name.endswith("/a2ui_support/catalogs/banking_view.schema.json") for name in names
+        )
         assert any(name.endswith("/a2ui_support/templates/data_chart.json") for name in names)
+        assert any(name.endswith("/a2ui_support/templates/financial_view.json") for name in names)

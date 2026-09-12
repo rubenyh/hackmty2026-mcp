@@ -60,7 +60,7 @@ async def test_a2ui_resource_and_tool_protocol(monkeypatch: pytest.MonkeyPatch) 
         assert chat_template[0]["createSurface"]["catalogId"] == CHAT_MESSAGE_SURFACE.catalog_id
 
         tools = await client.list_tools()
-        assert len(tools) == 9
+        assert len(tools) == 10
         for listed_tool in tools:
             json.dumps(listed_tool.input_schema, allow_nan=False)
             assert listed_tool.input_schema.get("additionalProperties") is False
@@ -89,6 +89,7 @@ async def test_a2ui_resource_and_tool_protocol(monkeypatch: pytest.MonkeyPatch) 
             "sourceComponentId",
             "timestamp",
             "context",
+            "trustedScope",
         }
         assert set(action_tool.input_schema["required"]) == {
             "name",

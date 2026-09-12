@@ -6,7 +6,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from supabase_mcp.a2ui_support.catalog_registry import CATALOG_REGISTRY, CatalogRegistry
-from supabase_mcp.a2ui_support.constants import A2UI_VERSION
+from supabase_mcp.a2ui_support.constants import A2UI_FINANCE_V2_CATALOG, A2UI_VERSION
 from supabase_mcp.a2ui_support.models import SurfaceSpec
 
 _MESSAGE_KEYS = frozenset({"createSurface", "updateComponents", "updateDataModel", "deleteSurface"})
@@ -67,7 +67,68 @@ class A2UIValidator:
         if "root" not in component_ids:
             raise A2UIValidationError("A2UI template must contain a root component")
 
+        references_by_id: dict[str, tuple[str, ...]] = {}
+        for item in components:
+            component = item.get("component")
+            child_references: tuple[str, ...] = ()
+            if component in {"Button", "Card"}:
+                child = item.get("child")
+                if isinstance(child, str):
+                    child_references = (child,)
+            elif component == "Column":
+                children = item.get("children")
+                if isinstance(children, list):
+                    child_references = tuple(child for child in children if isinstance(child, str))
+            references_by_id[item["id"]] = child_references
+        references = {child for children in references_by_id.values() for child in children}
+        if references.difference(component_ids):
+            raise A2UIValidationError("A2UI component references must target this surface")
+
+        visited: set[str] = set()
+        visiting: set[str] = set()
+
+        def visit(component_id: str) -> None:
+            if component_id in visiting:
+                raise A2UIValidationError("A2UI component references must not contain cycles")
+            if component_id in visited:
+                return
+            visiting.add(component_id)
+            for child_id in references_by_id[component_id]:
+                visit(child_id)
+            visiting.remove(component_id)
+            visited.add(component_id)
+
+        visit("root")
+        if visited != set(component_ids):
+            raise A2UIValidationError("Every A2UI component must be reachable from root")
+
         self._sdk_validate([dict(message) for message in messages], surface.catalog_id)
+
+    def validate_banking_view(self, value: Mapping[str, Any]) -> None:
+        """Validate one literal BankingView value against the canonical Finance v2 catalog."""
+        messages = [
+            {
+                "version": A2UI_VERSION,
+                "createSurface": {
+                    "surfaceId": "banking-view-validation",
+                    "catalogId": A2UI_FINANCE_V2_CATALOG,
+                },
+            },
+            {
+                "version": A2UI_VERSION,
+                "updateComponents": {
+                    "surfaceId": "banking-view-validation",
+                    "components": [
+                        {
+                            "id": "root",
+                            "component": "BankingView",
+                            "view": dict(value),
+                        }
+                    ],
+                },
+            },
+        ]
+        self._sdk_validate(messages, A2UI_FINANCE_V2_CATALOG)
 
     @staticmethod
     def validate_json_pointer(path: str) -> None:

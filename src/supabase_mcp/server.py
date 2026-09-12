@@ -22,6 +22,7 @@ from supabase_mcp.a2ui_support.surfaces import (
     CHAT_MESSAGE_SURFACE,
     DATA_CHART_SURFACE,
     DATABASE_OVERVIEW_SURFACE,
+    FINANCIAL_VIEW_SURFACE,
 )
 from supabase_mcp.config import Settings
 from supabase_mcp.database import DatabaseClient
@@ -34,8 +35,10 @@ from supabase_mcp.tools import (
     database_overview,
     database_overview_resource,
     describe_table,
+    financial_view_resource,
     health_check,
     list_allowed_tables,
+    present_financial_view,
     select_rows,
     visualize_allowed_data,
 )
@@ -83,6 +86,17 @@ mcp.tool(
     meta=ui_metadata(DATA_CHART_SURFACE),
     annotations=ToolAnnotations(
         title="Visualize allowed data",
+        read_only_hint=True,
+        destructive_hint=False,
+        idempotent_hint=True,
+        open_world_hint=False,
+    ),
+)
+mcp.tool(
+    present_financial_view,
+    meta=ui_metadata(FINANCIAL_VIEW_SURFACE),
+    annotations=ToolAnnotations(
+        title="Present financial view",
         read_only_hint=True,
         destructive_hint=False,
         idempotent_hint=True,
@@ -141,6 +155,13 @@ mcp.resource(
     description=CHAT_MESSAGE_SURFACE.description,
     mime_type=A2UI_MIME_TYPE,
 )(chat_message_resource)
+mcp.resource(
+    FINANCIAL_VIEW_SURFACE.resource_uri,
+    name="financial_view_a2ui",
+    title=FINANCIAL_VIEW_SURFACE.title,
+    description=FINANCIAL_VIEW_SURFACE.description,
+    mime_type=A2UI_MIME_TYPE,
+)(financial_view_resource)
 
 
 def main() -> None:

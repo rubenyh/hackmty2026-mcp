@@ -1,0 +1,44 @@
+[
+  {
+    "version": "v0.9.1",
+    "createSurface": {
+      "surfaceId": "financial-view",
+      "catalogId": "https://fluidbank.app/a2ui/catalogs/finance/v2"
+    }
+  },
+  {
+    "version": "v0.9.1",
+    "updateComponents": {
+      "surfaceId": "financial-view",
+      "components": [
+        {
+          "id": "root",
+          "component": "Column",
+          "children": ["banking_view", "request_financial_view_button"]
+        },
+        {
+          "id": "banking_view",
+          "component": "BankingView",
+          "view": {"path": "/view"}
+        },
+        {
+          "id": "request_financial_view_label",
+          "component": "Text",
+          "text": {"path": "/actionLabel"}
+        },
+        {
+          "id": "request_financial_view_button",
+          "component": "Button",
+          "child": "request_financial_view_label",
+          "variant": "primary",
+          "action": {
+            "event": {
+              "name": "request_financial_view",
+              "context": {"intent": {"path": "/requestIntent"}}
+            }
+          }
+        }
+      ]
+    }
+  }
+]

@@ -10,12 +10,15 @@ from typing import Any
 from supabase_mcp.a2ui_support.constants import (
     A2UI_BASIC_CATALOG,
     A2UI_FINANCE_CATALOG,
+    A2UI_FINANCE_V2_CATALOG,
     CHAT_MESSAGE_RESOURCE_URI,
     CHAT_MESSAGE_SURFACE_ID,
     DATA_CHART_RESOURCE_URI,
     DATA_CHART_SURFACE_ID,
     DATABASE_OVERVIEW_RESOURCE_URI,
     DATABASE_OVERVIEW_SURFACE_ID,
+    FINANCIAL_VIEW_RESOURCE_URI,
+    FINANCIAL_VIEW_SURFACE_ID,
 )
 from supabase_mcp.a2ui_support.models import SurfaceSpec
 from supabase_mcp.a2ui_support.validation import A2UIValidationError, A2UIValidator
@@ -96,7 +99,19 @@ CHAT_MESSAGE_SURFACE = SurfaceSpec(
     description="Static A2UI layout wrapping one plain conversational reply as a text surface.",
 )
 
+FINANCIAL_VIEW_SURFACE = SurfaceSpec(
+    surface_id=FINANCIAL_VIEW_SURFACE_ID,
+    resource_uri=FINANCIAL_VIEW_RESOURCE_URI,
+    catalog_id=A2UI_FINANCE_V2_CATALOG,
+    template_name="financial_view.json",
+    title="Financial view",
+    description=(
+        "Stable Finance v2 surface composed from one semantic BankingView and one request action."
+    ),
+)
+
 SURFACE_REGISTRY = SurfaceRegistry(A2UIValidator())
 SURFACE_REGISTRY.register(DATABASE_OVERVIEW_SURFACE)
 SURFACE_REGISTRY.register(DATA_CHART_SURFACE)
 SURFACE_REGISTRY.register(CHAT_MESSAGE_SURFACE)
+SURFACE_REGISTRY.register(FINANCIAL_VIEW_SURFACE)

@@ -50,8 +50,11 @@ src/
       response.py     Reusable ToolResult/updateDataModel composition
       mappers.py      Pure domain-to-data-model and fallback mappings
       actions.py      Typed action context and explicit handler allowlist
+      catalogs/
+        banking_view.schema.json  Canonical Finance v2 BankingView contract
       templates/
         database_overview.json  Static createSurface/updateComponents messages
+        financial_view.json     Stable BankingView/Button composition
     tools/
       a2ui.py         Overview, generic action/error, and resource handlers
       health.py       Sanitized database readiness check
@@ -98,7 +101,7 @@ Unqualified allowlist entries are accepted only when exactly one schema is confi
 
 `supabase_mcp.server` selects `WindowsSelectorEventLoopPolicy` on Windows before importing FastMCP or database modules. This ordering is required by Psycopg's async implementation.
 
-FastMCP's lifespan creates one shared `DatabaseClient`, starts it before serving requests, makes it available through the tool context, and disposes it during shutdown. The module preserves the four original tools (`health_check`, `list_allowed_tables`, `describe_table`, and `select_rows`) and adds `database_overview`, `visualize_allowed_data`, `a2ui_action`, and `a2ui_error`. It publishes both A2UI presentation templates as read-only resources.
+FastMCP's lifespan creates one shared `DatabaseClient`, starts it before serving requests, makes it available through the tool context, and disposes it during shutdown. The module preserves the four original tools (`health_check`, `list_allowed_tables`, `describe_table`, and `select_rows`) and adds `database_overview`, `visualize_allowed_data`, `present_financial_view`, `chat_message`, `a2ui_action`, and `a2ui_error`. It publishes the corresponding A2UI presentation templates as read-only resources.
 
 `main()` selects stdio unless `MCP_TRANSPORT=http`. HTTP uses the configured host and port; FastMCP exposes its MCP endpoint at `/mcp`. The service itself adds no authentication, authorization middleware, reverse-proxy TLS, rate limiting, or tenant isolation.
 
@@ -153,9 +156,9 @@ Serialization preserves primitive JSON values, stringifies UUIDs and decimals, e
 
 ## A2UI presentation boundary
 
-A2UI is an optional presentation layer over MCP, not a database or authorization layer. `database_overview` and `visualize_allowed_data` use it. Normal MCP tools continue returning their existing typed results without inheriting from an A2UI base class.
+A2UI is an optional presentation layer over MCP, not a database or authorization layer. `database_overview`, `visualize_allowed_data`, and `present_financial_view` use it. Normal MCP tools continue returning their existing typed results without inheriting from an A2UI base class.
 
-`CatalogRegistry` loads and caches the Basic and packaged Finance v1 schemas with `importlib.resources`, rejecting duplicate/unknown IDs or malformed catalogs at import. `SurfaceRegistry` maps each surface ID and resource URI to exactly one catalog and template. Registration rejects duplicates or malformed templates, verifies v0.9.1, catalog/surface identity, ordering, unique component IDs, and `root`, then runs the matching official SDK validator. Validated serialized templates are served without consulting PostgreSQL.
+`CatalogRegistry` loads and caches the Basic, packaged Finance v1, and assembled Finance v2 schemas with `importlib.resources`, rejecting duplicate/unknown IDs or malformed catalogs at import. `SurfaceRegistry` maps each surface ID and resource URI to exactly one catalog and template. Registration rejects duplicates or malformed templates, verifies v0.9.1, catalog/surface identity, ordering, unique component IDs, `root`, and local component references, then runs the matching official SDK validator. Validated serialized templates are served without consulting PostgreSQL.
 
 `database_overview` calls a bounded domain service over `DatabaseClient.list_allowed_objects()`. It exposes cached schema metadata only—no samples, row counts, totals, or aggregates—so it does not receive a user scope. The domain result has no A2UI dependency. A pure mapper produces a small data model for the template. `A2UIResponseFactory` converts it to a validated `updateDataModel` with `path: "/"`, adds a text fallback, preserves a detached JSON-safe domain result in `structuredContent`, embeds the A2UI update using `application/a2ui+json` and `Annotations(audience=["user"])`, and adds the same `_meta.ui` resource link used in the static tool definition. It can also update a validated absolute JSON Pointer without rebuilding the layout.
 
@@ -169,15 +172,25 @@ The static template contains only `createSurface` and `updateComponents`. It bin
 
 The wire `Chart` owns a whole-object binding and a strict discriminator: `{kind: "area", accessibleSummary?, props}` or `{kind: "heatmap", accessibleSummary?, props}`. It requires unique stable area series IDs and bounded data, and accepts no callback, formatter, style, URL, JSX, component name, or generic object. Future catalog components require an SDK-valid versioned schema, an explicit client adapter, a synchronized agent schema copy, parity fixtures, and package tests.
 
+### Finance v2 BankingView surface
+
+MCP is the authoritative source of `https://fluidbank.app/a2ui/catalogs/finance/v2`. `CatalogRegistry` builds it deterministically from Finance v1 and the packaged canonical `banking_view.schema.json`, adding only `BankingView`. The schema preserves the 13 discriminated financial intents, their bounded intent-specific properties, and the common empty-state contract. Unknown fields are rejected, including arbitrary styling. The official SDK validates literal BankingView data before a response is built.
+
+`present_financial_view` is an optional generic validation/resource factory for MCP callers. Its request contains a BankingView value, bounded action label, and bounded target intent; it does not retrieve data or decide which financial semantics to use. The Agent may construct the same messages locally after interpreting MCP results, but must use this exact MCP-owned contract. The registered `financial-view` template is a complete flat graph with stable IDs: `root` (`Column`), `banking_view`, `request_financial_view_label`, and `request_financial_view_button`. Local template validation additionally rejects references to components outside the surface. One dynamic `updateDataModel` supplies the view and action values.
+
+`visualize_allowed_data` remains unchanged and presentation-independent in `structuredContent`. The Agent may call it more than once and combine returned `chart` objects into one BankingView payload, such as `spending-analysis`; no MCP retrieval call selects a BankingView intent, and no last-result-wins behavior is introduced in the data service.
+
 ## A2UI actions and errors
 
-There is one generic `a2ui_action` tool with the five protocol fields `name`, `surfaceId`, `sourceComponentId`, `timestamp`, and `context`. `ActionRegistry` maps a fixed name to a fixed handler and strict Pydantic context model. Registration verifies that the action and source component occur in the registered template. Dispatch verifies the timestamp, surface, component, and context before calling the handler. It never uses `eval`, dynamic imports, or input-driven attribute lookup. The only registered action, `refresh_database_overview`, reuses the read-only overview domain service and is bounded to 100 objects.
+There is one generic `a2ui_action` tool. The client action retains exactly `name`, `surfaceId`, `sourceComponentId`, `timestamp`, and `context`; the tool accepts optional server-supplied `trustedScope` separately. `ActionRegistry` maps a fixed name to a fixed handler and strict Pydantic context model. Registration verifies that the action and source component occur in the registered template. Dispatch verifies the timestamp, surface, component, context, and any required trusted scope before calling the handler. It never uses `eval`, dynamic imports, or input-driven attribute lookup.
+
+`refresh_database_overview` remains read-only and bounded to 100 objects. `request_financial_view` is bound only to `financial-view` / `request_financial_view_button`, requires trusted `{user_id}` scope, and accepts the 13-value intent plus optional `accountId`, `startDate`, `endDate`, and `period`. Strict context rejects identity fields. Its normalized result keeps the original five-field action, the semantic request, and trusted scope separate; it performs no retrieval and selects no chart.
 
 The generic `a2ui_error` handler recognizes `VALIDATION_FAILED`, returns a safe acknowledgement, and logs only bounded structural metadata: whether the error is a validation failure, whether the surface is known, path presence, and message length. It does not log or echo the client-provided code, message, path, stack trace, rows, or credentials.
 
 ## Catalog support and negotiation
 
-The server supports exactly A2UI `v0.9.1` with the official Basic Catalog and `https://fluidbank.app/a2ui/catalogs/finance/v1`; inline and all other catalogs are rejected. `a2ui-agent-sdk` 0.5.x supplies the bundled schema machinery. The Finance schema is loaded with `importlib.resources`, validated at import, and cached. Local validation supplements, rather than replaces, the SDK for registered-surface and catalog consistency.
+The server supports exactly A2UI `v0.9.1` with the official Basic Catalog, `https://fluidbank.app/a2ui/catalogs/finance/v1`, and `https://fluidbank.app/a2ui/catalogs/finance/v2`; inline and all other catalogs are rejected. `a2ui-agent-sdk` 0.5.x supplies the bundled schema machinery. Finance schemas are loaded with `importlib.resources`, validated at import, and cached. Local validation supplements, rather than replaces, the SDK for registered-surface and catalog consistency.
 
 A2UI recommends selecting catalogs from custom client capabilities during MCP `initialize`. Inspection of FastMCP 4.0.3's documented public server APIs found no stable hook that exposes arbitrary initialization capabilities to these typed handlers with session-scoped storage. The server therefore does not implement or claim initialize-time catalog negotiation and does not depend on FastMCP internals or monkeypatches. Controlled clients may advertise and recognize the fixed allowlist; all other clients retain the text and `structuredContent` fallback. Per-call A2UI capability metadata is likewise not used as a substitute for a verified session negotiation API.
 
@@ -221,6 +234,7 @@ The offline tests use FastMCP's in-memory client and an empty deny-all allowlist
 - **2026-09-12:** Added `transfers` (simulated self-account transfers, trigger-enforced same-user constraint) and the `monthly_cash_flow` view (income/expenses/net per account per month) to represent transfers and cash flow explicitly. `MCP_ALLOWED_TABLES` must include `public.transfers,public.monthly_cash_flow` for either to be reachable through the server - update this on every deployment (including the Horizon instance), not just locally.
 - **2026-09-12:** Made the file-based Horizon entrypoint import-safe by removing the internal/external `a2ui` package-name collision (renamed to `a2ui_support`), constrained sdist contents, and added package-import and `fastmcp inspect` regressions that run without runtime secrets.
 - **2026-09-12:** Added explicit protocol assertions that both A2UI resources are UTF-8 textual JSON validated by the registered v0.9.1 catalogs, checked every exposed input schema for JSON serialization, and removed startup stack-trace logging.
+- **2026-09-12:** Made MCP authoritative for Finance v2 BankingView, added one stable composed financial surface, registered `request_financial_view`, and separated trusted user scope from the five-field client action.
 
 ## Documentation maintenance
 

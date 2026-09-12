@@ -12,10 +12,13 @@ from pydantic import BaseModel, Field, ValidationError, model_validator
 
 from supabase_mcp.a2ui_support.surfaces import SurfaceRegistry
 from supabase_mcp.database import DatabaseClient
-from supabase_mcp.models import StrictModel
+from supabase_mcp.models import FinancialIntent, StrictModel, UserScope
 from supabase_mcp.services.database_overview import DATABASE_OVERVIEW_MAX_LIMIT
 
-ActionHandler = Callable[[BaseModel, DatabaseClient], Awaitable[ToolResult]]
+ActionHandler = Callable[
+    ["A2UIActionCall", BaseModel, UserScope | None, DatabaseClient],
+    Awaitable[ToolResult],
+]
 
 
 class ActionDispatchError(ValueError):
@@ -49,6 +52,31 @@ class RefreshDatabaseOverviewContext(StrictModel):
     limit: int = Field(ge=1, le=DATABASE_OVERVIEW_MAX_LIMIT)
 
 
+class RequestFinancialViewContext(StrictModel):
+    """Bounded semantic request returned to the Agent for orchestration."""
+
+    intent: FinancialIntent
+    account_id: str | None = Field(default=None, alias="accountId", min_length=1, max_length=128)
+    start_date: str | None = Field(default=None, alias="startDate", pattern=r"^\d{4}-\d{2}-\d{2}$")
+    end_date: str | None = Field(default=None, alias="endDate", pattern=r"^\d{4}-\d{2}-\d{2}$")
+    period: str | None = Field(default=None, min_length=1, max_length=120)
+
+    @model_validator(mode="after")
+    def validate_dates(self) -> RequestFinancialViewContext:
+        from datetime import date
+
+        for value in (self.start_date, self.end_date):
+            if value is not None:
+                try:
+                    date.fromisoformat(value)
+                except ValueError as exc:
+                    raise ValueError("action dates must be real calendar dates") from exc
+        if self.start_date is not None and self.end_date is not None:
+            if self.start_date > self.end_date:
+                raise ValueError("startDate must not be after endDate")
+        return self
+
+
 @dataclass(frozen=True, slots=True)
 class RegisteredAction:
     name: str
@@ -56,6 +84,7 @@ class RegisteredAction:
     source_component_id: str
     context_model: type[BaseModel]
     handler: ActionHandler
+    requires_trusted_scope: bool = False
 
 
 class ActionRegistry:
@@ -84,6 +113,7 @@ class ActionRegistry:
         timestamp: str,
         context: dict[str, Any],
         database: DatabaseClient,
+        trusted_scope: UserScope | dict[str, Any] | None = None,
     ) -> ToolResult:
         try:
             call = A2UIActionCall.model_validate(
@@ -117,7 +147,19 @@ class ActionRegistry:
             raise ActionDispatchError(
                 "invalid_action_context", "The A2UI action context is invalid."
             ) from exc
-        return await registered.handler(validated_context, database)
+        validated_scope: UserScope | None = None
+        if trusted_scope is not None:
+            try:
+                validated_scope = UserScope.model_validate(trusted_scope)
+            except ValidationError as exc:
+                raise ActionDispatchError(
+                    "invalid_trusted_scope", "The trusted action scope is invalid."
+                ) from exc
+        if registered.requires_trusted_scope and validated_scope is None:
+            raise ActionDispatchError(
+                "missing_trusted_scope", "This A2UI action requires trusted user scope."
+            )
+        return await registered.handler(call, validated_context, validated_scope, database)
 
     def _template_declares_action(self, action: RegisteredAction) -> bool:
         surface = self._surfaces.get_by_id(action.surface_id)
