@@ -43,6 +43,11 @@ ANA_ACCOUNT_ID = stable_id("account:ana_garcia:checking")
 LUIS_ACCOUNT_ID = stable_id("account:luis_torres:checking")
 SOFIA_ACCOUNT_ID = stable_id("account:sofia_ramirez:savings")
 
+# Second account per persona so there is something to transfer between.
+ANA_SAVINGS_ACCOUNT_ID = stable_id("account:ana_garcia:savings")
+LUIS_SAVINGS_ACCOUNT_ID = stable_id("account:luis_torres:savings")
+SOFIA_CHECKING_ACCOUNT_ID = stable_id("account:sofia_ramirez:checking")
+
 USERS = [
     {
         "id": ANA_ID,
@@ -115,6 +120,27 @@ ACCOUNTS = [
         "account_type": "savings",
         "currency": "MXN",
         "available_balance": 15000.00,
+    },
+    {
+        "id": ANA_SAVINGS_ACCOUNT_ID,
+        "user_id": ANA_ID,
+        "account_type": "savings",
+        "currency": "MXN",
+        "available_balance": 250.00,
+    },
+    {
+        "id": LUIS_SAVINGS_ACCOUNT_ID,
+        "user_id": LUIS_ID,
+        "account_type": "savings",
+        "currency": "MXN",
+        "available_balance": 5000.00,
+    },
+    {
+        "id": SOFIA_CHECKING_ACCOUNT_ID,
+        "user_id": SOFIA_ID,
+        "account_type": "checking",
+        "currency": "MXN",
+        "available_balance": 1200.00,
     },
 ]
 
@@ -233,6 +259,40 @@ SUBSCRIPTIONS = [
 ]
 
 
+TRANSFERS = [
+    {
+        # Covering part of the weekend shortfall from her small emergency savings.
+        "id": stable_id("transfer:ana:savings_to_checking"),
+        "user_id": ANA_ID,
+        "from_account_id": ANA_SAVINGS_ACCOUNT_ID,
+        "to_account_id": ANA_ACCOUNT_ID,
+        "amount": 200.00,
+        "status": "simulated",
+        "note": "Cubrir gastos del fin de semana",
+    },
+    {
+        # Moving a surplus into savings.
+        "id": stable_id("transfer:luis:checking_to_savings"),
+        "user_id": LUIS_ID,
+        "from_account_id": LUIS_ACCOUNT_ID,
+        "to_account_id": LUIS_SAVINGS_ACCOUNT_ID,
+        "amount": 1000.00,
+        "status": "simulated",
+        "note": "Ahorro mensual",
+    },
+    {
+        # Funding checking ahead of the appliance purchase simulation.
+        "id": stable_id("transfer:sofia:savings_to_checking"),
+        "user_id": SOFIA_ID,
+        "from_account_id": SOFIA_ACCOUNT_ID,
+        "to_account_id": SOFIA_CHECKING_ACCOUNT_ID,
+        "amount": 500.00,
+        "status": "simulated",
+        "note": "Fondos para la compra del refrigerador",
+    },
+]
+
+
 def _client() -> Client:
     load_dotenv(Path(__file__).resolve().parent.parent / ".env")
     url = os.environ["SUPABASE_URL"]
@@ -248,6 +308,7 @@ def seed(client: Client) -> None:
     client.table("accounts").upsert(ACCOUNTS, on_conflict="id").execute()
     client.table("transactions").upsert(TRANSACTIONS, on_conflict="id").execute()
     client.table("subscriptions").upsert(SUBSCRIPTIONS, on_conflict="id").execute()
+    client.table("transfers").upsert(TRANSFERS, on_conflict="id").execute()
 
 
 def main() -> None:
@@ -259,6 +320,7 @@ def main() -> None:
     print(f"  accounts:                  {len(ACCOUNTS)}")
     print(f"  transactions:              {len(TRANSACTIONS)}")
     print(f"  subscriptions:             {len(SUBSCRIPTIONS)}")
+    print(f"  transfers:                 {len(TRANSFERS)}")
     print("Demo user ids:")
     print(f"  ana_garcia   (crisis):      {ANA_ID}")
     print(f"  luis_torres  (subscriptions): {LUIS_ID}")

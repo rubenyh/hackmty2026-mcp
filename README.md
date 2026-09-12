@@ -55,7 +55,7 @@ SUPABASE_DATABASE_URL=postgresql+psycopg://mcp_reader.PROJECT_REF:REPLACE_WITH_P
 ## Demo data
 
 `scripts/seed_demo_data.py` seeds the demo banking schema (`users`, `accessibility_preferences`,
-`accounts`, `transactions`, `subscriptions`) for local development. It writes through the
+`accounts`, `transactions`, `subscriptions`, `transfers`) for local development. It writes through the
 Supabase service-role key (bypassing RLS) and is safe to re-run — every row uses a UUID
 derived deterministically from a stable slug, so re-seeding upserts instead of duplicating:
 
@@ -66,6 +66,14 @@ python scripts/seed_demo_data.py
 
 It reads `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` from `.env`; the MCP server itself never
 reads these two variables.
+
+`transfers` (simulated, self-account only) and the `monthly_cash_flow` view (income/expenses/net
+per account per month, built on `transactions`) both need to be in `MCP_ALLOWED_TABLES` to be
+reachable through the server:
+
+```env
+MCP_ALLOWED_TABLES=public.users,public.accessibility_preferences,public.accounts,public.transactions,public.subscriptions,public.transfers,public.monthly_cash_flow
+```
 
 All supported settings and defaults are documented in [`.env.example`](.env.example). The service has no `LLM_*`, `OPENAI_*`, or `AGENT_*` settings.
 
