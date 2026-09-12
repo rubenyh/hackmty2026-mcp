@@ -16,6 +16,8 @@ from supabase_mcp.a2ui_support.validation import A2UIValidator
 from supabase_mcp.models import VisualizeAllowedDataResult
 from supabase_mcp.server import mcp
 
+USER_A = "68dc4d66-07b8-5893-95f1-07f06989a552"
+
 
 async def test_a2ui_resource_and_tool_protocol(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv(
@@ -93,6 +95,13 @@ async def test_a2ui_resource_and_tool_protocol(monkeypatch: pytest.MonkeyPatch) 
             "message",
         }
 
+        missing_scope = await client.call_tool(
+            "select_rows",
+            {"schema": "public", "table": "transactions"},
+            raise_on_error=False,
+        )
+        assert missing_scope.is_error is True
+
         result = await client.call_tool("database_overview", {"limit": 5})
         assert result.structured_content is not None
         assert result.structured_content["ok"] is True
@@ -135,6 +144,7 @@ async def test_a2ui_resource_and_tool_protocol(monkeypatch: pytest.MonkeyPatch) 
             "visualize_allowed_data",
             {
                 "request": {
+                    "scope": {"user_id": USER_A},
                     "source": {"schema": "public", "table": "cashflow"},
                     "limit": 10,
                     "visualization": {
@@ -165,6 +175,7 @@ async def test_a2ui_resource_and_tool_protocol(monkeypatch: pytest.MonkeyPatch) 
             "visualize_allowed_data",
             {
                 "request": {
+                    "scope": {"user_id": USER_A},
                     "source": {"schema": "public", "table": "cashflow"},
                     "visualization": {
                         "kind": "area",

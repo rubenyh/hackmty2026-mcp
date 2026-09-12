@@ -118,7 +118,9 @@ Startup failures are logged only by bounded operation name and exception class. 
 
 ## Query construction
 
-Clients cannot provide SQL. A `SelectRequest` names a reflected schema/object, optional reflected columns, typed filters, typed ordering, an optional limit, and a non-negative offset. Pydantic models forbid unknown fields.
+Clients cannot provide SQL. A `SelectRequest` names a reflected schema/object, a mandatory typed `UserScope`, optional reflected columns, typed filters, typed ordering, an optional limit, and a non-negative offset. Pydantic models forbid unknown fields.
+
+`TABLE_USER_SCOPES` is the explicit ownership registry. `users.id`, `accessibility_preferences.user_id`, `accounts.user_id`, `subscriptions.user_id`, and `transfers.user_id` are direct scopes. `transactions.account_id` and `monthly_cash_flow.account_id` are scoped with a parameterized correlated `EXISTS` through `accounts.id` and `accounts.user_id`. The canonical scope predicate is added before all business filters, so SQLAlchemy combines them with `AND`. Unknown/non-demo UUIDs, missing ownership metadata, model-style ownership filters, and allowlisted objects without a registry entry fail with sanitized errors instead of returning rows.
 
 Supported filter operators are `eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `in`, `like`, `ilike`, and `is_null`. Ordinary operators require a JSON scalar; `is_null` requires a boolean; `in` requires a non-empty list of at most 100 JSON scalars. SQLAlchemy builds bound expressions for values.
 
@@ -143,7 +145,7 @@ A2UI is an optional presentation layer over MCP, not a database or authorization
 
 `CatalogRegistry` loads and caches the Basic and packaged Finance v1 schemas with `importlib.resources`, rejecting duplicate/unknown IDs or malformed catalogs at import. `SurfaceRegistry` maps each surface ID and resource URI to exactly one catalog and template. Registration rejects duplicates or malformed templates, verifies v0.9.1, catalog/surface identity, ordering, unique component IDs, and `root`, then runs the matching official SDK validator. Validated serialized templates are served without consulting PostgreSQL.
 
-`database_overview` calls a bounded domain service over `DatabaseClient.list_allowed_objects()`. The domain result has no A2UI dependency. A pure mapper produces a small data model for the template. `A2UIResponseFactory` converts it to a validated `updateDataModel` with `path: "/"`, adds a text fallback, preserves a detached JSON-safe domain result in `structuredContent`, embeds the A2UI update using `application/a2ui+json` and `Annotations(audience=["user"])`, and adds the same `_meta.ui` resource link used in the static tool definition. It can also update a validated absolute JSON Pointer without rebuilding the layout.
+`database_overview` calls a bounded domain service over `DatabaseClient.list_allowed_objects()`. It exposes cached schema metadata only—no samples, row counts, totals, or aggregates—so it does not receive a user scope. The domain result has no A2UI dependency. A pure mapper produces a small data model for the template. `A2UIResponseFactory` converts it to a validated `updateDataModel` with `path: "/"`, adds a text fallback, preserves a detached JSON-safe domain result in `structuredContent`, embeds the A2UI update using `application/a2ui+json` and `Annotations(audience=["user"])`, and adds the same `_meta.ui` resource link used in the static tool definition. It can also update a validated absolute JSON Pointer without rebuilding the layout.
 
 The static template contains only `createSurface` and `updateComponents`. It binds text and action context to the dynamic model and contains no database values. The dynamic tool response contains only `updateDataModel`; clients may cache the static template independently.
 
@@ -151,7 +153,7 @@ The static template contains only `createSurface` and `updateComponents`. It bin
 
 `CatalogRegistry` allowlists and caches the Basic and Finance v1 validators, rejects duplicate or unknown IDs, and fails import on malformed packaged schemas. Every `SurfaceSpec` declares exactly one catalog. `database_overview.json` remains unchanged on Basic and is not a component registry. `data_chart.json` is a separate static surface at `a2ui://finance/data-chart`; Finance v1 exposes only `Text`, `Button`, `Card`, `Column`, and `Chart`.
 
-`visualize_allowed_data` accepts a strict source/filter/order/limit request plus an `area` or `heatmap` column mapping. It resolves only reflected allowlisted identifiers, reuses parameterized `SelectRequest` queries, fetches only required columns, verifies value columns are numeric, applies deterministic ordering, and caps raw rows at 240 for area or 500 for heatmap. Rows with null required values are omitted and counted; malformed dates, duplicate labels/dates, non-finite values, and values outside the chart range fail with safe errors. Its static definition and successful runtime result use identical `_meta.ui`; fallback text and structured domain content are independent of the embedded dynamic update.
+`visualize_allowed_data` accepts a strict scope/source/filter/order/limit request plus an `area` or `heatmap` column mapping. It resolves only reflected allowlisted identifiers, reuses parameterized `SelectRequest` queries, fetches only required columns, rejects ownership identifiers as chart data, verifies value columns are numeric, applies deterministic ordering, and caps raw rows at 240 for area or 500 for heatmap. Rows with null required values are omitted and counted; malformed dates, duplicate labels/dates, non-finite values, and values outside the chart range fail with safe errors. Its static definition and successful runtime result use identical `_meta.ui`; fallback text and structured domain content are independent of the embedded dynamic update.
 
 The wire `Chart` owns a whole-object binding and a strict discriminator: `{kind: "area", accessibleSummary?, props}` or `{kind: "heatmap", accessibleSummary?, props}`. It requires unique stable area series IDs and bounded data, and accepts no callback, formatter, style, URL, JSX, component name, or generic object. Future catalog components require an SDK-valid versioned schema, an explicit client adapter, a synchronized agent schema copy, parity fixtures, and package tests.
 
@@ -171,7 +173,8 @@ A2UI recommends selecting catalogs from custom client capabilities during MCP `i
 
 The safety model is layered:
 
-- PostgreSQL role grants and RLS define the authoritative data permissions.
+- PostgreSQL role grants define the database permissions; this MVP adds no RLS or per-user database authorization.
+- Canonical demo-user scoping is application-level filtering and is not a production authorization boundary.
 - Configuration narrows exposure to named schemas and objects.
 - Reflection narrows selectable identifiers to known columns.
 - Typed inputs and SQLAlchemy binding prevent arbitrary statements and value interpolation.
@@ -199,6 +202,7 @@ The offline tests use FastMCP's in-memory client and an empty deny-all allowlist
 
 - **2026-09-09:** Created a constrained read-only FastMCP/Supabase service.
 - **2026-09-11:** Documented the repository as the MCP-only implementation present in the tree and removed stale agent/provider, UI, test-suite, SQL-script, and `src/`-layout claims from the documentation and example environment.
+- **2026-09-12:** Added mandatory typed demo-user scope, explicit direct/join ownership rules, fail-closed row queries, and ownership-safe chart mapping.
 - **2026-09-11:** Aligned Hatchling, imports, documentation, and static analysis with the `src/supabase_mcp` package layout while preserving the `supabase-mcp` entry point.
 - **2026-09-11:** Added compositional A2UI v0.9.1 support for a bounded database overview, including a packaged resource template, SDK-backed validation, reusable response factory, explicit read-only action registry, safe error acknowledgements, protocol tests, and non-A2UI fallbacks.
 - **2026-09-12:** Made the file-based Horizon entrypoint import-safe by removing the internal/external `a2ui` package-name collision, constrained sdist contents, and added package-import and `fastmcp inspect` regressions that run without runtime secrets.

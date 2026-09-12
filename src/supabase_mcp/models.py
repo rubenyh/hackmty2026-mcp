@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 from typing import Annotated, Any, Literal, Self, TypeAlias
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -64,11 +65,18 @@ class OrderBy(StrictModel):
     direction: OrderDirection = OrderDirection.ASC
 
 
+class UserScope(StrictModel):
+    """Canonical demo-user scope supplied by the application, never selected by the model."""
+
+    user_id: UUID
+
+
 class SelectRequest(StrictModel):
     """A structured, bounded table selection request."""
 
     schema_name: str = Field(alias="schema", min_length=1)
     table: str = Field(min_length=1)
+    scope: UserScope
     columns: list[str] | None = None
     filters: list[FilterCondition] = Field(default_factory=list)
     order_by: list[OrderBy] = Field(default_factory=list)
@@ -175,6 +183,7 @@ VisualizationSpec = Annotated[
 class VisualizeAllowedDataRequest(StrictModel):
     """Strict, bounded input for one domain-level visualization query."""
 
+    scope: UserScope
     source: VisualizationSource
     filters: list[FilterCondition] = Field(default_factory=list, max_length=20)
     order: list[OrderBy] = Field(default_factory=list, max_length=4)

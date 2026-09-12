@@ -101,6 +101,11 @@ async def get_data_chart(
     """Query only required columns and map the bounded result to one chart variant."""
     visualization = request.visualization
     columns = _required_columns(request)
+    if set(columns) & database.user_scope_columns(request.source.schema_name, request.source.table):
+        raise ChartMappingError(
+            "ownership_column_not_visualizable",
+            "Ownership identifiers cannot be used as chart data.",
+        )
     numeric_columns = (
         visualization.y_columns
         if isinstance(visualization, AreaVisualization)
@@ -124,6 +129,7 @@ async def get_data_chart(
         SelectRequest(
             schema=request.source.schema_name,
             table=request.source.table,
+            scope=request.scope,
             columns=columns,
             filters=request.filters,
             order_by=ordering,

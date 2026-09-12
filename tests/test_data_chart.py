@@ -17,6 +17,9 @@ from supabase_mcp.models import (
 )
 from supabase_mcp.services.data_chart import ChartMappingError, get_data_chart
 
+USER_A = "68dc4d66-07b8-5893-95f1-07f06989a552"
+USER_B = "c1a3797d-b335-5a9d-98a1-402311f82c7a"
+
 
 class FakeDatabase:
     def __init__(self, rows: list[dict[str, Any]], *, numeric: bool = True) -> None:
@@ -33,6 +36,10 @@ class FakeDatabase:
                 "column_not_numeric", "A chart value column is not numeric."
             )
 
+    def user_scope_columns(self, schema: str, table: str) -> frozenset[str]:
+        del schema, table
+        return frozenset()
+
     async def select_rows(self, request: Any) -> tuple[list[dict[str, Any]], int, bool]:
         self.request = request
         return self.rows, request.limit, len(self.rows) > request.limit
@@ -41,6 +48,7 @@ class FakeDatabase:
 def area_request(*, limit: int = 100) -> VisualizeAllowedDataRequest:
     return VisualizeAllowedDataRequest.model_validate(
         {
+            "scope": {"user_id": USER_A},
             "source": {"schema": "public", "table": "cashflow"},
             "limit": limit,
             "visualization": {
@@ -75,6 +83,7 @@ async def test_area_mapping_queries_only_required_columns_and_omits_null_rows() 
 async def test_heatmap_accepts_database_dates_and_enforces_nonnegative_values() -> None:
     request = VisualizeAllowedDataRequest.model_validate(
         {
+            "scope": {"user_id": USER_A},
             "source": {"schema": "analytics", "table": "daily_activity"},
             "limit": 500,
             "visualization": {
@@ -128,3 +137,86 @@ async def test_area_limit_is_clamped_and_nonnumeric_metadata_fails_before_query(
 def test_request_rejects_unknown_shapes_and_properties(payload: dict[str, Any]) -> None:
     with pytest.raises(ValidationError):
         VisualizeAllowedDataRequest.model_validate(payload)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("kind", "user_id", "expected", "expected_transactions"),
+    [
+        ("area", USER_A, ["2026-09-10", "2026-09-11"], ["A1", "A2"]),
+        ("area", USER_B, ["2026-09-12", "2026-09-13"], ["B1", "B2"]),
+        ("heatmap", USER_A, ["2026-09-10", "2026-09-11"], ["A1", "A2"]),
+        ("heatmap", USER_B, ["2026-09-12", "2026-09-13"], ["B1", "B2"]),
+    ],
+)
+async def test_area_and_heatmap_rows_are_isolated_by_scope(
+    kind: str, user_id: str, expected: list[str], expected_transactions: list[str]
+) -> None:
+    class ScopedDatabase(FakeDatabase):
+        def __init__(self, rows: list[dict[str, Any]]) -> None:
+            super().__init__(rows)
+            self.selected_transactions: list[str] = []
+
+        def user_scope_columns(self, schema: str, table: str) -> frozenset[str]:
+            del schema, table
+            return frozenset({"account_id"})
+
+        async def select_rows(self, request: Any) -> tuple[list[dict[str, Any]], int, bool]:
+            self.request = request
+            owned_rows = [row for row in self.rows if row["owner"] == str(request.scope.user_id)]
+            self.selected_transactions = [str(row["transaction"]) for row in owned_rows]
+            selected = [{column: row[column] for column in request.columns} for row in owned_rows]
+            return selected, request.limit, False
+
+    database = ScopedDatabase(
+        [
+            {"transaction": "A1", "owner": USER_A, "day": "2026-09-10", "amount": 10},
+            {"transaction": "A2", "owner": USER_A, "day": "2026-09-11", "amount": 20},
+            {"transaction": "B1", "owner": USER_B, "day": "2026-09-12", "amount": 30},
+            {"transaction": "B2", "owner": USER_B, "day": "2026-09-13", "amount": 40},
+        ]
+    )
+    visualization = (
+        {"kind": "area", "x_column": "day", "y_columns": ["amount"]}
+        if kind == "area"
+        else {"kind": "heatmap", "date_column": "day", "value_column": "amount"}
+    )
+    request = VisualizeAllowedDataRequest.model_validate(
+        {
+            "scope": {"user_id": user_id},
+            "source": {"schema": "public", "table": "transactions"},
+            "visualization": visualization,
+        }
+    )
+
+    result = await get_data_chart(database, request)  # type: ignore[arg-type]
+    actual = (
+        [point.label for point in result.chart.props.data]
+        if isinstance(result.chart, AreaChartData)
+        else [cell.date for cell in result.chart.props.data]
+    )
+    assert actual == expected
+    assert database.selected_transactions == expected_transactions
+
+
+@pytest.mark.asyncio
+async def test_ownership_identifier_cannot_be_visualized() -> None:
+    class ScopedDatabase(FakeDatabase):
+        def user_scope_columns(self, schema: str, table: str) -> frozenset[str]:
+            del schema, table
+            return frozenset({"account_id"})
+
+    request = VisualizeAllowedDataRequest.model_validate(
+        {
+            "scope": {"user_id": USER_A},
+            "source": {"schema": "public", "table": "transactions"},
+            "visualization": {
+                "kind": "area",
+                "x_column": "account_id",
+                "y_columns": ["amount"],
+            },
+        }
+    )
+    with pytest.raises(ChartMappingError) as caught:
+        await get_data_chart(ScopedDatabase([]), request)  # type: ignore[arg-type]
+    assert caught.value.code == "ownership_column_not_visualizable"

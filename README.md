@@ -39,7 +39,7 @@ Set the database URL and exact object allowlist in `.env`:
 ```env
 SUPABASE_DATABASE_URL=postgresql://mcp_reader:REPLACE_WITH_PASSWORD@db.PROJECT_REF.supabase.co:5432/postgres?sslmode=require
 MCP_ALLOWED_SCHEMAS=public
-MCP_ALLOWED_TABLES=public.customers,public.accounts,public.transactions
+MCP_ALLOWED_TABLES=public.users,public.accessibility_preferences,public.accounts,public.transactions,public.subscriptions,public.transfers,public.monthly_cash_flow
 ```
 
 For the Supabase session pooler, use its connection parameters. Both `postgresql://` and `postgresql+psycopg://` are accepted. Percent-encode special characters in usernames and passwords.
@@ -109,11 +109,13 @@ Importing or inspecting the object does not load `Settings`, start a transport, 
 - `health_check`: runs a sanitized `SELECT 1` readiness check.
 - `list_allowed_tables`: lists configured objects that were successfully reflected at startup.
 - `describe_table`: returns cached column metadata for one allowlisted table or view.
-- `select_rows`: reads selected columns with typed filters, ordering, limit, and offset.
+- `select_rows`: reads selected columns with a mandatory typed demo-user scope plus typed filters, ordering, limit, and offset.
 - `database_overview`: returns a bounded database-object overview with A2UI v0.9.1 presentation metadata, a dynamic data-model update, structured domain data, and a text fallback.
 - `visualize_allowed_data`: reads only selected columns from one reflected allowlisted object and maps them to a bounded area chart (up to 240 rows and four numeric series) or calendar heatmap (up to 500 rows).
 - `a2ui_action`: dispatches the five A2UI action fields through an explicit read-only action allowlist. The initial `refresh_database_overview` action refreshes the overview using a validated limit.
 - `a2ui_error`: safely acknowledges client rendering and validation reports without echoing their potentially sensitive message.
+
+`select_rows` and `visualize_allowed_data` require `scope: {"user_id": "<seeded-demo-uuid>"}`. The scope is separate from caller-selected filters and is always combined with them using `AND`. `users`, `accessibility_preferences`, `accounts`, `subscriptions`, and `transfers` use direct ownership; `transactions` and `monthly_cash_flow` use an `EXISTS` relationship through `accounts`. Unknown demo users and allowlisted objects without a configured ownership rule fail closed. Ownership columns cannot be supplied as ordinary filters, and chart mappings cannot use them as visual data.
 
 `select_rows` supports `eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `in`, `like`, `ilike`, and `is_null`. Filter values are JSON scalars; `in` accepts a non-empty list of at most 100 scalars. The response includes `row_count`, the effective `limit`, `offset`, and a `truncated` flag. If no ordering is supplied, tables with primary keys are ordered by those keys.
 
@@ -134,7 +136,9 @@ The database overview flow is:
    - `_meta.ui` linking the result to `a2ui://database/overview`.
 4. An A2UI-capable client fetches and caches the template, applies the dynamic update, and renders the component tree using its own widgets.
 
-The chart resource follows the same flow. Its packaged `data_chart.json` contains only `createSurface` and `updateComponents`; the tool embeds only `updateDataModel`. The strict request selects a reflected source plus filters, ordering, limit, and either `{kind: "area", x_column, y_columns}` or `{kind: "heatmap", date_column, value_column}`. It cannot select a component, catalog, URI, style, JSX, or raw A2UI. Numeric columns are checked from reflected metadata, values must be finite, ordering is deterministic, and rows with null required values are omitted and counted. Duplicate mapped labels/dates and malformed dates fail safely.
+The chart resource follows the same flow. Its packaged `data_chart.json` contains only `createSurface` and `updateComponents`; the tool embeds only `updateDataModel`. The strict request selects a canonical demo-user scope, reflected source, business filters, ordering, limit, and either `{kind: "area", x_column, y_columns}` or `{kind: "heatmap", date_column, value_column}`. It cannot select a component, catalog, URI, style, JSX, or raw A2UI. Numeric columns are checked from reflected metadata, values must be finite, ordering is deterministic, and rows with null required values are omitted and counted. Duplicate mapped labels/dates and malformed dates fail safely.
+
+This scope is hackathon-MVP application filtering. It does not add RLS, JWT verification, Supabase Auth enforcement, or a production authorization boundary; the MCP database role can still read all rows.
 
 `Chart` binds one whole discriminated value at `/chart`: `{kind: "area", accessibleSummary?, props: AreaChartProps}` or `{kind: "heatmap", accessibleSummary?, props: HeatmapChartProps}`. Area series require stable unique IDs; both variants reject unknown properties and bound all arrays and strings. Empty arrays are valid and delegate to the existing client empty states.
 
