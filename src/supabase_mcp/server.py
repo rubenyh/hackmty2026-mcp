@@ -14,10 +14,23 @@ from typing import Any
 
 from fastmcp import FastMCP
 from fastmcp.server.lifespan import lifespan
+from mcp.types import ToolAnnotations
 
+from supabase_mcp.a2ui.constants import A2UI_MIME_TYPE
+from supabase_mcp.a2ui.response import ui_metadata
+from supabase_mcp.a2ui.surfaces import DATABASE_OVERVIEW_SURFACE
 from supabase_mcp.config import Settings
 from supabase_mcp.database import DatabaseClient
-from supabase_mcp.tools import describe_table, health_check, list_allowed_tables, select_rows
+from supabase_mcp.tools import (
+    a2ui_action,
+    a2ui_error,
+    database_overview,
+    database_overview_resource,
+    describe_table,
+    health_check,
+    list_allowed_tables,
+    select_rows,
+)
 
 
 def load_settings() -> Settings:
@@ -46,6 +59,44 @@ mcp.tool(health_check)
 mcp.tool(list_allowed_tables)
 mcp.tool(describe_table)
 mcp.tool(select_rows)
+mcp.tool(
+    database_overview,
+    meta=ui_metadata(DATABASE_OVERVIEW_SURFACE),
+    annotations=ToolAnnotations(
+        title="Database overview",
+        read_only_hint=True,
+        destructive_hint=False,
+        idempotent_hint=True,
+        open_world_hint=False,
+    ),
+)
+mcp.tool(
+    a2ui_action,
+    annotations=ToolAnnotations(
+        title="Handle A2UI action",
+        read_only_hint=True,
+        destructive_hint=False,
+        idempotent_hint=True,
+        open_world_hint=False,
+    ),
+)
+mcp.tool(
+    a2ui_error,
+    annotations=ToolAnnotations(
+        title="Report A2UI client error",
+        read_only_hint=True,
+        destructive_hint=False,
+        idempotent_hint=True,
+        open_world_hint=False,
+    ),
+)
+mcp.resource(
+    DATABASE_OVERVIEW_SURFACE.resource_uri,
+    name="database_overview_a2ui",
+    title=DATABASE_OVERVIEW_SURFACE.title,
+    description=DATABASE_OVERVIEW_SURFACE.description,
+    mime_type=A2UI_MIME_TYPE,
+)(database_overview_resource)
 
 
 def main() -> None:

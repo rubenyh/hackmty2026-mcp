@@ -1,6 +1,6 @@
 # Supabase Read-Only MCP Server
 
-A small FastMCP service that exposes an explicitly allowlisted subset of Supabase PostgreSQL through four read-only tools. It supports stdio for local MCP clients and Streamable HTTP for separately managed clients.
+A small FastMCP service that exposes an explicitly allowlisted subset of Supabase PostgreSQL through read-only tools. It supports stdio for local MCP clients and Streamable HTTP for separately managed clients. Selected results can also be presented as declarative [A2UI](https://a2ui.org/) interfaces.
 
 This repository currently contains the MCP server only. It does not contain an LLM agent, chat UI, application API, migrations, or write tools.
 
@@ -79,16 +79,69 @@ On Windows, start the module as shown above. `supabase_mcp.server` selects the e
 - `list_allowed_tables`: lists configured objects that were successfully reflected at startup.
 - `describe_table`: returns cached column metadata for one allowlisted table or view.
 - `select_rows`: reads selected columns with typed filters, ordering, limit, and offset.
+- `database_overview`: returns a bounded database-object overview with A2UI v0.9.1 presentation metadata, a dynamic data-model update, structured domain data, and a text fallback.
+- `a2ui_action`: dispatches the five A2UI action fields through an explicit read-only action allowlist. The initial `refresh_database_overview` action refreshes the overview using a validated limit.
+- `a2ui_error`: safely acknowledges client rendering and validation reports without echoing their potentially sensitive message.
 
 `select_rows` supports `eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `in`, `like`, `ilike`, and `is_null`. Filter values are JSON scalars; `in` accepts a non-empty list of at most 100 scalars. The response includes `row_count`, the effective `limit`, `offset`, and a `truncated` flag. If no ordering is supplied, tables with primary keys are ordered by those keys.
+
+## A2UI v0.9.1 over MCP
+
+A2UI is a declarative presentation protocol. It does not replace MCP, FastMCP, the database service, or PostgreSQL permissions. This server implements the current production protocol version `v0.9.1` with MIME type `application/a2ui+json`; it does not use the candidate v1.0 protocol and does not run client-provided code.
+
+The database overview separates cacheable presentation from changing data:
+
+1. `resources/list` advertises `a2ui://database/overview`.
+2. `resources/read` returns its static `createSurface` and `updateComponents` messages. The template contains data bindings but no Supabase results.
+3. `tools/call` for `database_overview` obtains a bounded domain result and returns:
+   - useful `TextContent` for clients without A2UI;
+   - the same domain result in `structuredContent`;
+   - an `EmbeddedResource` containing only `updateDataModel`;
+   - `_meta.ui` linking the result to `a2ui://database/overview`.
+4. An A2UI-capable client fetches and caches the template, applies the dynamic update, and renders the component tree using its own widgets.
+
+The embedded resource is annotated for the `user` audience so a supporting host can render it without putting presentation JSON into the model context. The separate fallback and structured domain data remain available for reasoning and for clients that ignore embedded resources.
+
+### Inspect the protocol
+
+Start Inspector from this directory:
+
+```bash
+uv run fastmcp dev inspector src/supabase_mcp/server.py:mcp --project .
+```
+
+In Inspector:
+
+1. List resources and read `a2ui://database/overview`.
+2. List tools and inspect `database_overview`; its definition includes `_meta.ui`.
+3. Call it with `{"limit": 25}` and inspect its text, `structuredContent`, embedded `updateDataModel`, and runtime `_meta.ui`.
+4. Optionally call `a2ui_action` with `name`, `surfaceId`, `sourceComponentId`, `timestamp`, and `context` as emitted by the refresh button.
+
+Inspector exposes the real MCP JSON but does not render A2UI. A rendering client must recognize `application/a2ui+json`, resolve `_meta.ui.resourceUri`, validate/process v0.9.1 messages, implement the negotiated Basic Catalog components, maintain per-surface data state, and forward component actions to `a2ui_action`.
+
+### Extend A2UI safely
+
+To add a surface:
+
+1. Add a static JSON template under `src/supabase_mcp/a2ui/templates/` using `v0.9.1`, the allowlisted Basic Catalog, stable component IDs, a `root`, and data bindings.
+2. Add a `SurfaceSpec` and register it in `a2ui/surfaces.py`; registration loads it through `importlib.resources`, rejects duplicate IDs/URIs or missing templates, and validates it with the official SDK.
+3. Publish the cached template with `mcp.resource(...)` and its stable `a2ui://` URI.
+4. Write a pure mapper from the domain result to the template data model, then use `A2UIResponseFactory` in only the tool that needs that surface.
+
+To add an action, include it on a template component, define a strict Pydantic context model, and add one fixed `RegisteredAction` to the central registry. Do not create a tool per button or derive handlers with `eval`, dynamic imports, or input-driven `getattr`.
+
+### Catalog negotiation limitation
+
+A2UI recommends negotiating supported catalogs during MCP `initialize`. FastMCP 4.0.3 does not expose a documented public server hook for reading arbitrary client initialization capabilities and persisting a selected custom catalog per session. This implementation therefore does not claim initialize-time negotiation, does not use FastMCP internals or monkeypatching, and emits only the fixed A2UI v0.9.1 Basic Catalog. A controlled client can declare A2UI support and recognize that catalog; unsupported clients continue to use the text and structured-data fallback. Per-call capability metadata is not consumed because FastMCP does not expose it to these typed handlers as a stable catalog-negotiation API.
 
 ## Validate changes
 
 These checks do not require a live database:
 
 ```powershell
+uv run pytest
 uv run ruff format --check src/supabase_mcp
-uv run ruff check src/supabase_mcp
+uv run ruff check .
 uv run mypy
 uv run python -c "from supabase_mcp.config import Settings; print('import ok')"
 ```
