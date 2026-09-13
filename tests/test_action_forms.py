@@ -60,6 +60,7 @@ class FakeDatabase:
                     "bank_name": "Banco receptor",
                     "last_four": "4321",
                     "status": "verified",
+                    "linked_account_id": "10000000-0000-4000-8000-000000000003",
                 }
             ],
             "cards": [
@@ -213,7 +214,7 @@ async def test_transfer_form_exposes_current_contacts_as_single_choice_options()
     recipient = next(component for component in components if component["id"] == "recipient")
     assert recipient["component"] == "ChoicePicker"
     assert recipient["options"][0] == {
-        "label": "Ana · Banco receptor · •••• 4321",
+        "label": "Ana · Banco receptor · •••• 4321 · cuenta FluidBank",
         "value": "Ana",
     }
 

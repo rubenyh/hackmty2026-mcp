@@ -51,6 +51,19 @@ _ACTION_DATABASE_ERRORS = {
         "recipient_not_available",
         "No se encontró un único destinatario disponible con ese nombre o terminación.",
     ),
+    "external_recipient_not_supported": (
+        "external_recipient_not_supported",
+        "Ese contacto no está vinculado a una cuenta FluidBank y no puede recibir "
+        "una transferencia local.",
+    ),
+    "recipient_matches_source": (
+        "recipient_matches_source",
+        "La cuenta de destino debe ser distinta de la cuenta de origen.",
+    ),
+    "recipient_account_not_available": (
+        "recipient_account_not_available",
+        "La cuenta vinculada al contacto ya no está disponible para recibir la transferencia.",
+    ),
     "credit_card_not_available": (
         "credit_card_not_available",
         "No se encontró una única tarjeta de crédito activa con ese nombre o terminación.",

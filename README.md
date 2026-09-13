@@ -316,6 +316,29 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for implementation details and [AGENTS.md
 
 ## Confirmed financial forms
 
-The mobile repository includes `supabase/migrations/202609130001_a2ui_actions.sql` and `supabase/migrations/202609130002_transfer_and_card_payment_actions.sql` (run in that order after the financial question-bank schema). Apply them, set a password for the dedicated `fluidbank_actions` PostgreSQL login through your administrator, and configure its TLS connection as `MCP_ACTIONS_DATABASE_URL`. Never substitute postgres or service_role. Keep the tables listed in the mobile action documentation in `MCP_ALLOWED_TABLES` and keep the original read connection. Set the same random `MCP_ACTIONS_SECRET` (at least 32 characters) on agent and MCP. The agent signs the complete event plus verified user ID; the MCP verifies the HMAC before any write. This works over the existing Horizon remote transport. Missing or mismatched signatures fail closed. No migration or deployment is performed merely by changing this code.
+The mobile repository includes the ordered action migrations
+`202609130001_a2ui_actions.sql`,
+`202609130002_transfer_and_card_payment_actions.sql`,
+`202609130003_primary_account_context.sql`, and
+`202609130004_internal_transfer_balances.sql`. Apply them after the financial
+question-bank schema, set a password for the dedicated `fluidbank_actions`
+PostgreSQL login through your administrator, and configure its TLS connection
+as `MCP_ACTIONS_DATABASE_URL`. Never substitute postgres or service_role. Keep
+the tables listed in the mobile action documentation in `MCP_ALLOWED_TABLES`
+and keep the original read connection. Set the same random
+`MCP_ACTIONS_SECRET` (at least 32 characters) on agent and MCP. The agent signs
+the complete event plus verified user ID; the MCP verifies the HMAC before any
+write. This works over the existing Horizon remote transport. Missing or
+mismatched signatures fail closed. No migration or deployment is performed
+merely by changing this code.
 
-`a2ui_form` prepares forms; `a2ui_action` can save user-confirmed budgets and goals, execute a transfer to a beneficiary or owned account, and apply a credit-card payment. Money operations update the MVP ledger atomically in `accounts`, `credit_card_terms`, `payment_orders`, and `transactions`. Missing write configuration returns `writes_not_configured`, with no simulated success. `a2ui_actions/actions.json` declares eight actions and each required input. Synchronize copies/templates from the mobile workspace using `node scripts/sync-a2ui-actions.mjs`; CI can use `--check`.
+`a2ui_form` prepares forms; `a2ui_action` can save user-confirmed budgets and
+goals, execute a transfer to an owned account or a verified beneficiary linked
+to another FluidBank account, and apply a credit-card payment. Transfers debit
+the sender, credit the linked recipient, create both ledger movements, and
+record `payment_orders.credited_account_id` atomically. External contacts are
+not offered as executable destinations because this MVP has no external-bank
+payment rail. Missing write configuration returns `writes_not_configured`,
+with no simulated success. `a2ui_actions/actions.json` declares eight actions
+and each required input. Synchronize copies/templates from the mobile workspace
+using `node scripts/sync-a2ui-actions.mjs`; CI can use `--check`.

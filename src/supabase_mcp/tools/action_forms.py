@@ -94,13 +94,17 @@ async def _prepare_transfer(
     sources.sort(
         key=lambda row: (row["account_type"] != "checking", -float(row["available_balance"]))
     )
-    beneficiaries = await _owned_rows(
+    saved_beneficiaries = await _owned_rows(
         database,
         scope,
         "beneficiaries",
-        ["display_name", "bank_name", "last_four", "status"],
+        ["display_name", "bank_name", "last_four", "status", "linked_account_id"],
     )
-    beneficiaries = [row for row in beneficiaries if row["status"] != "inactive"]
+    beneficiaries = [
+        row
+        for row in saved_beneficiaries
+        if row["status"] == "verified" and row.get("linked_account_id") is not None
+    ]
     own_destinations = [
         row
         for row in accounts
@@ -130,7 +134,10 @@ async def _prepare_transfer(
     recipient_options = _unique_choice_options(
         [
             {
-                "label": f"{row['display_name']} · {row['bank_name']} · •••• {row['last_four']}",
+                "label": (
+                    f"{row['display_name']} · {row['bank_name']} · "
+                    f"•••• {row['last_four']} · cuenta FluidBank"
+                ),
                 "value": str(row["display_name"]),
             }
             for row in beneficiaries
@@ -153,8 +160,8 @@ async def _prepare_transfer(
             {"source_account": source_options, "recipient": recipient_options},
         )
     return (
-        "Selecciona una cuenta, un contacto y la cantidad. El botón confirma "
-        "el movimiento inmediato en MXN y no cobra comisión.",
+        "Selecciona una cuenta, un contacto vinculado y la cantidad. El botón confirma "
+        "el débito y el abono inmediato en MXN, sin comisión.",
         {},
         {"source_account": source_options, "recipient": recipient_options},
     )
