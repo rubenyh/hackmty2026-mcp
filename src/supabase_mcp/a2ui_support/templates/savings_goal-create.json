@@ -1,0 +1,111 @@
+[
+  {
+    "version": "v0.9.1",
+    "createSurface": {
+      "surfaceId": "savings_goal-create",
+      "catalogId": "https://a2ui.org/specification/v0_9_1/catalogs/basic/catalog.json"
+    }
+  },
+  {
+    "version": "v0.9.1",
+    "updateComponents": {
+      "surfaceId": "savings_goal-create",
+      "components": [
+        {
+          "id": "root",
+          "component": "Column",
+          "children": [
+            "title",
+            "help",
+            "name",
+            "target_amount",
+            "target_date",
+            "suggested_monthly_contribution",
+            "submit"
+          ]
+        },
+        {
+          "id": "title",
+          "component": "Text",
+          "text": "Crear meta de ahorro",
+          "variant": "h2"
+        },
+        {
+          "id": "help",
+          "component": "Text",
+          "text": {
+            "path": "/help"
+          }
+        },
+        {
+          "id": "name",
+          "component": "TextField",
+          "label": "Nombre de la meta",
+          "value": {
+            "path": "/form/name"
+          }
+        },
+        {
+          "id": "target_amount",
+          "component": "Slider",
+          "label": "Objetivo en MXN",
+          "value": {
+            "path": "/form/target_amount"
+          },
+          "min": 1,
+          "max": 1000000
+        },
+        {
+          "id": "target_date",
+          "component": "DateTimeInput",
+          "label": "Fecha objetivo",
+          "value": {
+            "path": "/form/target_date"
+          },
+          "enableDate": true,
+          "enableTime": false
+        },
+        {
+          "id": "suggested_monthly_contribution",
+          "component": "Slider",
+          "label": "Aportación mensual sugerida en MXN",
+          "value": {
+            "path": "/form/suggested_monthly_contribution"
+          },
+          "min": 0,
+          "max": 100000
+        },
+        {
+          "id": "submit",
+          "component": "Button",
+          "child": "submit-label",
+          "variant": "primary",
+          "action": {
+            "event": {
+              "name": "savings_goal.create",
+              "context": {
+                "name": {
+                  "path": "/form/name"
+                },
+                "target_amount": {
+                  "path": "/form/target_amount"
+                },
+                "target_date": {
+                  "path": "/form/target_date"
+                },
+                "suggested_monthly_contribution": {
+                  "path": "/form/suggested_monthly_contribution"
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "submit-label",
+          "component": "Text",
+          "text": "Crear"
+        }
+      ]
+    }
+  }
+]

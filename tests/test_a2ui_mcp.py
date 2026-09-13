@@ -59,8 +59,15 @@ async def test_a2ui_resource_and_tool_protocol(monkeypatch: pytest.MonkeyPatch) 
         A2UIValidator().validate_template(chat_template, CHAT_MESSAGE_SURFACE)
         assert chat_template[0]["createSurface"]["catalogId"] == CHAT_MESSAGE_SURFACE.catalog_id
 
+        for uri in (
+            "a2ui://actions/inputs",
+            "a2ui://actions/registry",
+            "a2ui://actions/budget.create",
+        ):
+            contract = await client.read_resource(uri)
+            assert json.loads(contract[0].text)
         tools = await client.list_tools()
-        assert len(tools) == 25
+        assert len(tools) == 26
         for listed_tool in tools:
             json.dumps(listed_tool.input_schema, allow_nan=False)
             assert listed_tool.input_schema.get("additionalProperties") is False
@@ -90,7 +97,10 @@ async def test_a2ui_resource_and_tool_protocol(monkeypatch: pytest.MonkeyPatch) 
             "timestamp",
             "context",
             "trustedScope",
+            "actionProof",
         }
+        assert action_tool.annotations is not None
+        assert action_tool.annotations.read_only_hint is False
         assert set(action_tool.input_schema["required"]) == {
             "name",
             "surfaceId",

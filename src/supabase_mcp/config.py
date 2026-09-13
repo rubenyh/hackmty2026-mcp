@@ -38,6 +38,10 @@ class Settings(BaseSettings):
     )
 
     database_url: SecretStr = Field(validation_alias="SUPABASE_DATABASE_URL")
+    actions_secret: SecretStr | None = Field(default=None, validation_alias="MCP_ACTIONS_SECRET")
+    actions_database_url: SecretStr | None = Field(
+        default=None, validation_alias="MCP_ACTIONS_DATABASE_URL"
+    )
     allowed_schemas: CsvTuple = Field(default=("public",), validation_alias="MCP_ALLOWED_SCHEMAS")
     allowed_tables: CsvTuple = Field(default=(), validation_alias="MCP_ALLOWED_TABLES")
     default_limit: int = Field(default=50, ge=1, validation_alias="MCP_DEFAULT_LIMIT")
@@ -86,6 +90,16 @@ class Settings(BaseSettings):
             raise ValueError("SUPABASE_DATABASE_URL sslmode must require or verify TLS")
         return value
 
+    @field_validator("actions_database_url")
+    @classmethod
+    def validate_actions_url(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is None:
+            return None
+        cls.validate_database_url(value)
+        if make_url(value.get_secret_value()).username not in {"fluidbank_actions"}:
+            raise ValueError("MCP_ACTIONS_DATABASE_URL requires the fluidbank_actions role")
+        return value
+
     @field_validator("timezone")
     @classmethod
     def validate_timezone(cls, value: str) -> str:
@@ -97,6 +111,10 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_related_values(self) -> Settings:
+        if self.actions_database_url is not None and (
+            self.actions_secret is None or len(self.actions_secret.get_secret_value()) < 32
+        ):
+            raise ValueError("Write actions require MCP_ACTIONS_SECRET with at least 32 characters")
         if self.default_limit > self.max_limit:
             raise ValueError("MCP_DEFAULT_LIMIT cannot exceed MCP_MAX_LIMIT")
 

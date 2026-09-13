@@ -1,0 +1,123 @@
+[
+  {
+    "version": "v0.9.1",
+    "createSurface": {
+      "surfaceId": "budget-create",
+      "catalogId": "https://a2ui.org/specification/v0_9_1/catalogs/basic/catalog.json"
+    }
+  },
+  {
+    "version": "v0.9.1",
+    "updateComponents": {
+      "surfaceId": "budget-create",
+      "components": [
+        {
+          "id": "root",
+          "component": "Column",
+          "children": [
+            "title",
+            "help",
+            "name",
+            "category",
+            "limit_amount",
+            "start_date",
+            "end_date",
+            "submit"
+          ]
+        },
+        {
+          "id": "title",
+          "component": "Text",
+          "text": "Crear presupuesto",
+          "variant": "h2"
+        },
+        {
+          "id": "help",
+          "component": "Text",
+          "text": {
+            "path": "/help"
+          }
+        },
+        {
+          "id": "name",
+          "component": "TextField",
+          "label": "Nombre del presupuesto",
+          "value": {
+            "path": "/form/name"
+          }
+        },
+        {
+          "id": "category",
+          "component": "TextField",
+          "label": "Categoría: alimentos, restaurantes, transporte, servicios, salud o vivienda",
+          "value": {
+            "path": "/form/category"
+          }
+        },
+        {
+          "id": "limit_amount",
+          "component": "Slider",
+          "label": "Límite en MXN",
+          "value": {
+            "path": "/form/limit_amount"
+          },
+          "min": 1,
+          "max": 100000
+        },
+        {
+          "id": "start_date",
+          "component": "DateTimeInput",
+          "label": "Fecha de inicio",
+          "value": {
+            "path": "/form/start_date"
+          },
+          "enableDate": true,
+          "enableTime": false
+        },
+        {
+          "id": "end_date",
+          "component": "DateTimeInput",
+          "label": "Fecha final",
+          "value": {
+            "path": "/form/end_date"
+          },
+          "enableDate": true,
+          "enableTime": false
+        },
+        {
+          "id": "submit",
+          "component": "Button",
+          "child": "submit-label",
+          "variant": "primary",
+          "action": {
+            "event": {
+              "name": "budget.create",
+              "context": {
+                "name": {
+                  "path": "/form/name"
+                },
+                "category": {
+                  "path": "/form/category"
+                },
+                "limit_amount": {
+                  "path": "/form/limit_amount"
+                },
+                "start_date": {
+                  "path": "/form/start_date"
+                },
+                "end_date": {
+                  "path": "/form/end_date"
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "submit-label",
+          "component": "Text",
+          "text": "Crear"
+        }
+      ]
+    }
+  }
+]

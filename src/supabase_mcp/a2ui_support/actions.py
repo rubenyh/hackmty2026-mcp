@@ -144,8 +144,25 @@ class ActionRegistry:
         try:
             validated_context = registered.context_model.model_validate(call.context)
         except ValidationError as exc:
+            message = "Revisa los campos del formulario, los importes y el orden de las fechas."
+            if call.name.startswith(("budget.", "savings_goal.")):
+                from supabase_mcp.a2ui_actions.registry import ACTIONS
+
+                labels = {field["key"]: field["label"] for field in ACTIONS[call.name]["inputs"]}
+                invalid_fields = {
+                    labels.get(str(error["loc"][0]), "datos del formulario")
+                    for error in exc.errors(include_input=False, include_context=False)
+                    if error["loc"]
+                }
+                message = (
+                    "Revisa estos campos: " + "; ".join(sorted(invalid_fields)) + "."
+                    if invalid_fields
+                    else "Revisa que las fechas sean válidas y que la fecha final "
+                    "no sea anterior a la inicial."
+                )
             raise ActionDispatchError(
-                "invalid_action_context", "The A2UI action context is invalid."
+                "invalid_action_context",
+                message,
             ) from exc
         validated_scope: UserScope | None = None
         if trusted_scope is not None:

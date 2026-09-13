@@ -9,7 +9,8 @@ if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
+from importlib.resources import files
 from typing import Any
 
 from fastmcp import FastMCP
@@ -17,12 +18,15 @@ from fastmcp.server.lifespan import lifespan
 from mcp.types import ToolAnnotations
 
 from supabase_mcp.a2ui_support.constants import A2UI_MIME_TYPE
+from supabase_mcp.a2ui_support.models import SurfaceSpec
 from supabase_mcp.a2ui_support.response import ui_metadata
 from supabase_mcp.a2ui_support.surfaces import (
+    ACTION_SURFACES,
     CHAT_MESSAGE_SURFACE,
     DATA_CHART_SURFACE,
     DATABASE_OVERVIEW_SURFACE,
     FINANCIAL_VIEW_SURFACE,
+    SURFACE_REGISTRY,
 )
 from supabase_mcp.config import Settings
 from supabase_mcp.database import DatabaseClient
@@ -43,6 +47,7 @@ from supabase_mcp.tools import (
     select_rows,
     visualize_allowed_data,
 )
+from supabase_mcp.tools.action_forms import a2ui_form
 
 
 def load_settings() -> Settings:
@@ -67,6 +72,32 @@ async def app_lifespan(_server: FastMCP[Any]) -> AsyncIterator[dict[str, Any]]:
 
 
 mcp = FastMCP("Supabase Read-Only", lifespan=app_lifespan)
+mcp.tool(a2ui_form, annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False))
+
+
+def action_resource_reader(surface: SurfaceSpec) -> Callable[[], str]:
+    def read() -> str:
+        return SURFACE_REGISTRY.serialized_template(surface)
+
+    return read
+
+
+for action_name, action_surface in ACTION_SURFACES.items():
+    mcp.resource(
+        action_surface.resource_uri, name=action_name.replace(".", "_"), mime_type=A2UI_MIME_TYPE
+    )(action_resource_reader(action_surface))
+
+
+def input_contract_resource() -> str:
+    return files("supabase_mcp.a2ui_actions").joinpath("inputs.json").read_text()
+
+
+def action_contract_resource() -> str:
+    return files("supabase_mcp.a2ui_actions").joinpath("actions.json").read_text()
+
+
+mcp.resource("a2ui://actions/inputs", mime_type="application/json")(input_contract_resource)
+mcp.resource("a2ui://actions/registry", mime_type="application/json")(action_contract_resource)
 mcp.tool(health_check)
 mcp.tool(list_allowed_tables)
 mcp.tool(describe_table)
@@ -129,8 +160,8 @@ mcp.tool(
 mcp.tool(
     a2ui_action,
     annotations=ToolAnnotations(
-        title="Handle A2UI action",
-        read_only_hint=True,
+        title="Handle user-confirmed A2UI action",
+        read_only_hint=False,
         destructive_hint=False,
         idempotent_hint=True,
         open_world_hint=False,

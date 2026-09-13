@@ -54,6 +54,7 @@ from supabase_mcp.services.database_overview import (
     DatabaseOverview,
     get_database_overview,
 )
+from supabase_mcp.tools.action_forms import action_outcome, register_form_actions
 from supabase_mcp.tools.health import _database
 
 logger = logging.getLogger(__name__)
@@ -73,6 +74,7 @@ _chat_message_factory = A2UIResponseFactory(CHAT_MESSAGE_SURFACE)
 _financial_view_factory = A2UIResponseFactory(FINANCIAL_VIEW_SURFACE)
 _a2ui_validator = A2UIValidator()
 ACTION_REGISTRY = ActionRegistry(SURFACE_REGISTRY)
+register_form_actions(ACTION_REGISTRY)
 
 
 def database_overview_resource() -> str:
@@ -294,9 +296,26 @@ async def a2ui_action(
     context: dict[str, Any],
     ctx: Context,
     trustedScope: UserScope | None = None,
+    actionProof: str | None = None,
 ) -> ToolResult:
-    """Dispatch one allowlisted, read-only A2UI user action."""
+    """Dispatch one allowlisted A2UI user action with trusted ownership."""
     try:
+        database = _database(ctx)
+        if name in {"budget.create", "budget.update", "savings_goal.create", "savings_goal.update"}:
+            from supabase_mcp.a2ui_actions.proof import verify_action_proof
+
+            verify_action_proof(
+                database.settings.actions_secret,
+                actionProof,
+                {
+                    "name": name,
+                    "surfaceId": surfaceId,
+                    "sourceComponentId": sourceComponentId,
+                    "timestamp": timestamp,
+                    "context": context,
+                    "user_id": str(trustedScope.user_id) if trustedScope else None,
+                },
+            )
         return await ACTION_REGISTRY.dispatch(
             name=name,
             surface_id=surfaceId,
@@ -308,14 +327,7 @@ async def a2ui_action(
         )
     except ActionDispatchError as exc:
         logger.info("A2UI action rejected code=%s", exc.code)
-        return ToolResult(
-            content=[TextContent(text=exc.safe_message)],
-            structured_content={
-                "ok": False,
-                "error": {"code": exc.code, "message": exc.safe_message},
-            },
-            is_error=True,
-        )
+        return action_outcome(False, exc.safe_message, exc.code)
     except Exception as exc:
         logger.warning("A2UI action failed (%s)", type(exc).__name__)
         return ToolResult(

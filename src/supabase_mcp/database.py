@@ -167,7 +167,73 @@ class DatabaseClient:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self._engine: AsyncEngine | None = None
+        self._actions_engine: AsyncEngine | None = None
         self._objects: dict[tuple[str, str], ReflectedObject] = {}
+
+    async def apply_financial_action(
+        self,
+        name: str,
+        context: dict[str, Any],
+        scope: UserScope,
+        request_key: str,
+        payload_hash: str,
+    ) -> dict[str, Any]:
+        """Only the authenticated UI dispatcher can enter this optional write boundary."""
+        import json
+
+        from sqlalchemy.engine import make_url
+
+        if name not in {
+            "budget.create",
+            "budget.update",
+            "savings_goal.create",
+            "savings_goal.update",
+        }:
+            raise InvalidSelectionError("unknown_action", "La acción no está permitida.")
+        table = "budgets" if name.startswith("budget.") else "savings_goals"
+        if ("public", table) not in self.settings.allowed_table_pairs:
+            raise InvalidSelectionError(
+                "table_not_allowed", "La tabla de esta acción no está habilitada."
+            )
+        configured = self.settings.actions_database_url
+        if configured is None:
+            raise InvalidSelectionError(
+                "writes_not_configured",
+                "El servicio todavía no tiene habilitado el guardado. No se realizó ningún cambio.",
+            )
+        if self._actions_engine is None:
+            url = make_url(configured.get_secret_value()).set(drivername="postgresql+psycopg")
+            if "sslmode" not in url.query:
+                url = url.update_query_dict({"sslmode": "require"})
+            self._actions_engine = create_async_engine(
+                url, pool_size=2, max_overflow=0, pool_pre_ping=True
+            )
+        async with self._actions_engine.begin() as connection:
+            role = (await connection.execute(text("select current_user"))).scalar_one()
+            if role != "fluidbank_actions":
+                raise InvalidSelectionError(
+                    "invalid_write_role", "La conexión de escritura no usa el rol permitido."
+                )
+            await connection.execute(
+                text("select set_config('statement_timeout', :timeout, true)"),
+                {"timeout": str(self.settings.statement_timeout_ms)},
+            )
+            await connection.execute(
+                text("select set_config('request.jwt.claim.sub', :uid, true)"),
+                {"uid": str(scope.user_id)},
+            )
+            result = await connection.execute(
+                text(
+                    "select public.apply_a2ui_action(:name, :key, :hash, cast(:context as jsonb))"
+                ),
+                {
+                    "name": name,
+                    "key": request_key,
+                    "hash": payload_hash,
+                    "context": json.dumps(context),
+                },
+            )
+            return dict(result.scalar_one())
 
     async def start(self) -> None:
         """Create one engine and validate all configured allowlist entries."""
@@ -201,6 +267,9 @@ class DatabaseClient:
 
     async def stop(self) -> None:
         """Dispose the shared pool."""
+        if self._actions_engine is not None:
+            await self._actions_engine.dispose()
+            self._actions_engine = None
         if self._engine is not None:
             await self._engine.dispose()
             self._engine = None

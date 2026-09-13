@@ -239,3 +239,9 @@ Server configuration always requires a syntactically valid database URL. Startup
 - **HTTP is unreachable:** confirm `MCP_TRANSPORT=http`, then check `MCP_HOST`, `MCP_PORT`, and the `/mcp` path.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for implementation details and [AGENTS.md](AGENTS.md) for repository contribution rules.
+
+## Forms and saving budgets/goals
+
+The mobile repository includes `supabase/migrations/202609130001_a2ui_actions.sql` (run after the financial question-bank schema). Apply it, set a password for the dedicated `fluidbank_actions` PostgreSQL login through your administrator, and configure its TLS connection as `MCP_ACTIONS_DATABASE_URL`. Never substitute postgres or service_role. Keep budgets and savings_goals in MCP_ALLOWED_TABLES and keep the original read connection. Set the same random `MCP_ACTIONS_SECRET` (at least 32 characters) on agent and MCP. The agent signs the complete event plus verified user ID; the MCP verifies the HMAC before any write. This works over the existing Horizon remote transport. Missing or mismatched signatures fail closed. No migration or deployment is performed merely by changing this code.
+
+`a2ui_form` prepares forms; `a2ui_action` can now save user-confirmed budgets and goals. Missing write configuration returns `writes_not_configured`, with no simulated success. `a2ui_actions/actions.json` declares six actions and each required input. Synchronize copies/templates from the mobile workspace using `node scripts/sync-a2ui-actions.mjs`; CI can use `--check`.

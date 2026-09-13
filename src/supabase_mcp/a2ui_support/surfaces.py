@@ -7,6 +7,7 @@ from collections.abc import Mapping
 from importlib.resources import files
 from typing import Any
 
+from supabase_mcp.a2ui_actions.registry import ACTIONS
 from supabase_mcp.a2ui_support.constants import (
     A2UI_BASIC_CATALOG,
     A2UI_FINANCE_CATALOG,
@@ -115,3 +116,18 @@ SURFACE_REGISTRY.register(DATABASE_OVERVIEW_SURFACE)
 SURFACE_REGISTRY.register(DATA_CHART_SURFACE)
 SURFACE_REGISTRY.register(CHAT_MESSAGE_SURFACE)
 SURFACE_REGISTRY.register(FINANCIAL_VIEW_SURFACE)
+
+# Form layouts are generated from the packaged action registry.
+
+ACTION_SURFACES = {}
+for action_name, spec in ACTIONS.items():
+    surface = SurfaceSpec(
+        surface_id=spec["surfaceId"],
+        resource_uri=f"a2ui://actions/{action_name}",
+        catalog_id=A2UI_BASIC_CATALOG,
+        template_name=f"{spec['surfaceId']}.json",
+        title=spec["title"],
+        description="Formulario A2UI con inputs y envío explícito.",
+    )
+    SURFACE_REGISTRY.register(surface)
+    ACTION_SURFACES[action_name] = surface

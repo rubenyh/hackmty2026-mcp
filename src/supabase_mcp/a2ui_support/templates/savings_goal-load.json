@@ -1,0 +1,69 @@
+[
+  {
+    "version": "v0.9.1",
+    "createSurface": {
+      "surfaceId": "savings_goal-load",
+      "catalogId": "https://a2ui.org/specification/v0_9_1/catalogs/basic/catalog.json"
+    }
+  },
+  {
+    "version": "v0.9.1",
+    "updateComponents": {
+      "surfaceId": "savings_goal-load",
+      "components": [
+        {
+          "id": "root",
+          "component": "Column",
+          "children": [
+            "title",
+            "help",
+            "name",
+            "submit"
+          ]
+        },
+        {
+          "id": "title",
+          "component": "Text",
+          "text": "Seleccionar meta de ahorro",
+          "variant": "h2"
+        },
+        {
+          "id": "help",
+          "component": "Text",
+          "text": {
+            "path": "/help"
+          }
+        },
+        {
+          "id": "name",
+          "component": "TextField",
+          "label": "Nombre exacto de la meta",
+          "value": {
+            "path": "/form/name"
+          }
+        },
+        {
+          "id": "submit",
+          "component": "Button",
+          "child": "submit-label",
+          "variant": "primary",
+          "action": {
+            "event": {
+              "name": "savings_goal.load",
+              "context": {
+                "name": {
+                  "path": "/form/name"
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "submit-label",
+          "component": "Text",
+          "text": "Cargar datos"
+        }
+      ]
+    }
+  }
+]
