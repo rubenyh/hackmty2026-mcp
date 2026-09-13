@@ -17,28 +17,36 @@ from supabase_mcp.tools.finance._shared import _run
 
 
 async def get_transactions(request: TransactionsRequest, ctx: Context) -> ToolResult:
-    """Movimientos específicos / Specific transactions.
+    """Movimientos y compras individuales / Individual transaction records.
 
-    Use for merchants, purchases, latest movements, or filtered lists; for
-    aggregate patterns use analyze_spending. Úsala para movimientos concretos.
+    Raw transaction rows filtered by account, date range, category, merchant,
+    amount and direction. Records, not aggregates: category totals belong to
+    analyze_spending. Claves: movimiento, movimientos, compra, compras, cargo,
+    cargos, ultimos movimientos, transaction, transactions, purchases, charges.
     """
     return await _run("get_transactions", request, ctx, get_transactions_data)
 
 
 async def analyze_spending(request: SpendingAnalysisRequest, ctx: Context) -> ToolResult:
-    """Patrones de gasto / Spending patterns.
+    """Analisis de gastos agregados / Aggregated spending analysis.
 
-    Use for categories, daily activity, top merchants, and previous-period
-    comparison; do not call get_transactions first. Úsala para analizar gastos.
+    Totals spent by category, daily series, top merchants and comparison
+    against the prior period. Reads the underlying rows itself, so a
+    get_transactions call beforehand stays redundant. Claves: gasto, gastos,
+    gaste, cuanto gaste este mes, en que gasto, spend, spent, spending,
+    spending this month, expenses, spending by category, top merchants.
     """
     return await _run("analyze_spending", request, ctx, analyze_spending_data)
 
 
 async def get_transaction_disputes(request: TransactionDisputesRequest, ctx: Context) -> ToolResult:
-    """Aclaraciones de transacciones / Transaction disputes.
+    """Aclaraciones y cargos no reconocidos / Transaction disputes.
 
-    Returns dispute status with a safe transaction summary and validates every
-    identifier against the authenticated user. Úsala para cargos no reconocidos.
+    Dispute status, reason, opened date and a safe summary of the disputed
+    transaction. Identifiers are validated against the authenticated user.
+    Claves: aclaracion, aclaraciones, cargo no reconocido, reclamacion,
+    fraude, dispute, disputes, disputed charge, unrecognized charge,
+    chargeback, fraud.
     """
     return await _run("get_transaction_disputes", request, ctx, get_transaction_disputes_data)
 

@@ -7,6 +7,7 @@ The repository currently implements a standalone read-only Model Context Protoco
 ```text
 MCP client
     -> FastMCP transport
+    -> BM25 tool-search transform   (tools/list -> search_tools + call_tool)
     -> typed tool
     -> domain service / DatabaseClient
     -> A2UI mapper
@@ -36,6 +37,7 @@ src/
     __init__.py       Package marker
     config.py         Environment parsing, normalization, and validation
     database.py       Engine lifecycle, reflection, query construction, and execution
+    discovery.py      BM25 tool-search transform, app-only visibility, discovery logging
     errors.py         Internal safe error types
     models.py         Strict generic tool inputs and structured results
     finance_models/   Strict financial contracts grouped by domain
@@ -175,6 +177,72 @@ Supported filter operators are `eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `in`, `like
 
 The effective limit is the request limit or `MCP_DEFAULT_LIMIT` and cannot exceed `MCP_MAX_LIMIT`. The query fetches one additional row to set `truncated`, then returns at most the effective limit. Explicit ordering is applied in request order; otherwise primary-key columns provide deterministic ordering when present.
 
+## Progressive tool discovery
+
+Twenty-six tools are registered, fifteen of them financial, and that catalog is
+expected to keep growing. Sending every schema on every request wastes context,
+slows the turn, and degrades selection, so `supabase_mcp.discovery` installs
+FastMCP's native `BM25SearchTransform` as the last transform on the server.
+`tools/list` then carries exactly two synthetic tools:
+
+```text
+search_tools(query)         ranked, self-contained definitions from the catalog
+call_tool(name, arguments)  executes one discovered tool
+```
+
+`ALWAYS_VISIBLE` is empty. No tool is pinned: readiness checks are not part of a
+banking conversation, and every A2UI surface here is driven by the orchestrator
+rather than chosen by a model, so none of them needs to occupy context on every
+request. Adding a name to `ALWAYS_VISIBLE` requires a written architectural
+reason.
+
+Discovery is advertisement only. Registration, lifespan, services, database
+filtering, user scoping, A2UI contracts, structured results and error handling
+are unchanged; a hidden tool is still reached by name over the ordinary MCP
+pipeline, which is how the trusted orchestrator reads user context through
+`select_rows` and drives the confirmed-action flow through `a2ui_form`.
+
+Two properties of that pipeline matter for safety. `call_tool` dispatches
+through `ctx.fastmcp.call_tool`, so middleware — including
+`FinancialValidationMiddleware` — auth and per-component checks all run exactly
+as they do for a direct call; there is no reflection and no direct invocation of
+the underlying Python function. And both search and the proxy read the catalog
+through `CatalogTransform.get_tool_catalog`, which drops any component declaring
+`_meta.ui.visibility = ["app"]`. `discovery.app_only()` sets that declaration,
+merging it into an existing `ui` block so an A2UI resource link survives, and the
+server applies it to `health_check`, `list_allowed_tables`, `describe_table`,
+`select_rows`, `present_financial_view`, `chat_message`, `a2ui_action`,
+`a2ui_error` and `a2ui_form`. Those nine were never offered to a model, so
+discovery must not become the thing that offers them: a generic row reader — or
+a tool that writes budgets and goals — appearing in search results is a wider
+boundary, not a narrower context.
+
+Ranking quality is a property of the descriptions. BM25 indexes tool names,
+descriptions and parameter names/descriptions, and carries no stemming and no
+stopword list, so a rare function word scores like a rare domain term and
+`"how are my finances"` ranks whichever tool happens to contain `are`.
+`LoggedBM25SearchTransform` therefore strips function words from the incoming
+query before delegating upstream — never from the index — and every financial
+description is written declaratively, with an explicit boundary against its
+nearest neighbour (`get_transactions` records against `analyze_spending`
+aggregates, `get_cash_flow` trend against `analyze_spending` breakdown,
+`get_upcoming_payments` future against `get_payment_activity` past,
+`get_debt_overview` amounts against `compare_debt_scenarios` ranking) and a
+bilingual keyword tail covering the singular and plural forms a user types.
+Tags are registered for filtering and operator tooling; they are not indexed and
+do not affect ranking.
+
+FastMCP 4.0.3 has client-side handling for `notifications/tools/list_changed`
+but emits none from the server, and this server registers its whole catalog at
+import. No cache invalidation was added: the model-facing list is two synthetic
+tools that never change, and search results are read live from the catalog on
+every query, so a tool added by a redeploy is discoverable immediately.
+
+Discovery logging is debug-level and structural: `LoggedBM25SearchTransform`
+records candidate count, match count, matched names and a 120-character query
+fragment, and `DiscoveryLoggingMiddleware` records the tool name a `call_tool`
+selected. Neither logs arguments, rows, credentials or authorization headers.
+
 ## Tool contracts and errors
 
 - `health_check` returns readiness and database availability without database error details.
@@ -303,6 +371,7 @@ The offline tests use FastMCP's in-memory client and an empty deny-all allowlist
 - **2026-09-12:** Made MCP authoritative for Finance v2 BankingView, added one stable composed financial surface, registered `request_financial_view`, and separated trusted user scope from the five-field client action.
 - **2026-09-12:** Extended the canonical Finance v2 `BankingView` schema with the masked `PaymentCard` object (`cards` on `financial-summary`, `card` on `credit-card` and `card-security`) and the bounded credit-term projection (`creditLimit`, `statementBalance`, `cutoffDate`, `annualInterestRate`, `catPercentage`), and back-ported `totalOwnedBalance`, `totalSpent`, and `insight` so the packaged schema, the Agent's Pydantic mirror, and the client's Zod contract are byte-identical again. `get_accounts` and `get_debt_overview` already read `cards` and `credit_card_terms`, so no table, scope, or allowlist change was required.
 - **2026-09-12:** Added structured financial error taxonomy, redacted traceback logging and correlation IDs, pre-dispatch financial request validation, fixed Literal-based custom-period validation across all affected models, and applied the documented dispute period filter.
+- **2026-09-13:** Replaced the model-facing `tools/list` with FastMCP's native `BM25SearchTransform` (`search_tools` + `call_tool`, at most five results, nothing pinned), declared the nine infrastructure, presentation and confirmed-action tools app-only so discovery cannot widen model reach, rewrote the financial descriptions for retrieval and mutual disambiguation, and added stopword filtering to the query rather than to the index. `FINANCIAL_CONTRACT_HASHES` was regenerated for the new discovery text; names, request shapes and structured results are unchanged. The orchestrator now takes its model-facing tools from `tools/list` instead of a local allowlist, enforces trusted user scope through the `call_tool` envelope, and reads `select_rows` results from `structuredContent` because hidden tools publish no output schema. Live testing against `gemini-3.6-flash` showed roughly three model calls in ten filling the proxy's two-level envelope incorrectly, so the orchestrator normalizes the shapes that have a single valid reading; end-to-end success went from four of eight to ten of ten.
 
 ## Documentation maintenance
 

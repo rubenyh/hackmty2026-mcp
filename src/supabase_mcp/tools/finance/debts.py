@@ -12,19 +12,27 @@ from supabase_mcp.tools.finance._shared import _run
 
 
 async def get_debt_overview(request: DebtOverviewRequest, ctx: Context) -> ToolResult:
-    """Panorama de deudas y tarjetas / Debt and credit-card overview.
+    """Deudas y tarjetas de credito / Debts and credit-card balances owed.
 
-    Use for amounts owed, rates, due dates, utilization, and related scenarios;
-    for ranking scenarios use compare_debt_scenarios. El mínimo no es recomendación.
+    Amounts owed, outstanding balances, interest rates, minimum payments, due
+    dates, credit utilization and the payoff scenarios stored against each
+    debt. Ranking scenarios belongs to compare_debt_scenarios, and a minimum
+    payment is data rather than advice. Claves: deuda, deudas, deudas
+    pendientes, debo, cuanto debo, debt, debts, outstanding debt, owed, credit
+    card debt, credit card balance.
     """
     return await _run("get_debt_overview", request, ctx, get_debt_overview_data)
 
 
 async def compare_debt_scenarios(request: CompareDebtScenariosRequest, ctx: Context) -> ToolResult:
-    """Compara escenarios de deuda / Compare saved debt scenarios.
+    """Compara escenarios de pago de deuda / Compare saved debt payoff scenarios.
 
-    Ranks existing scenarios and shows baseline differences; never invents or
-    persists scenarios. Úsala solo para comparar escenarios existentes.
+    Ranks the scenarios already stored against one debt by total interest,
+    monthly payment or payoff speed, against the baseline. Invents and persists
+    nothing, and needs a debt id produced by get_debt_overview. Claves:
+    comparar, compara, comparacion, escenario, escenarios, estrategia,
+    avalancha, bola de nieve, compare scenarios, payoff strategies, snowball,
+    avalanche.
     """
     return await _run("compare_debt_scenarios", request, ctx, compare_debt_scenarios_data)
 

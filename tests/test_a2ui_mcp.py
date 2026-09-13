@@ -66,7 +66,14 @@ async def test_a2ui_resource_and_tool_protocol(monkeypatch: pytest.MonkeyPatch) 
         ):
             contract = await client.read_resource(uri)
             assert json.loads(contract[0].text)
-        tools = await client.list_tools()
+        # `tools/list` now carries only the discovery pair; the A2UI contracts
+        # below belong to the registered catalog that search and `call_tool`
+        # resolve against.
+        assert {tool.name for tool in await client.list_tools()} == {
+            "search_tools",
+            "call_tool",
+        }
+        tools = [tool.to_mcp_tool() for tool in await mcp._list_tools()]
         assert len(tools) == 26
         for listed_tool in tools:
             json.dumps(listed_tool.input_schema, allow_nan=False)
@@ -119,9 +126,12 @@ async def test_a2ui_resource_and_tool_protocol(monkeypatch: pytest.MonkeyPatch) 
 
         chat_tool = next(item for item in tools if item.name == "chat_message")
         assert chat_tool.meta is not None
+        # The A2UI surface link is unchanged; the visibility declaration beside
+        # it keeps the presentation tool out of model-facing discovery.
         assert chat_tool.meta["ui"] == {
             "resourceUri": CHAT_MESSAGE_SURFACE.resource_uri,
             "mimeType": A2UI_MIME_TYPE,
+            "visibility": ["app"],
         }
         assert chat_tool.annotations is not None
         assert chat_tool.annotations.read_only_hint is True

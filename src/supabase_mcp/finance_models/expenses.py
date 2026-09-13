@@ -28,13 +28,24 @@ class TransactionsRequest(_PeriodRequest, Pagination):
         "current_year",
         "custom",
     ] = "current_month"  # type: ignore[assignment]
-    direction: Literal["income", "expense"] | None = None
+    direction: Literal["income", "expense"] | None = Field(
+        default=None,
+        description="Keep only money in or money out / Solo ingresos o solo gastos",
+    )
     account_ids: AccountIds = Field(default_factory=list)
     categories: list[str] = Field(default_factory=list, max_length=30)
-    merchant_query: str | None = Field(default=None, min_length=1, max_length=100)
+    merchant_query: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=100,
+        description="Case-insensitive merchant name fragment / Fragmento del nombre del comercio",
+    )
     min_amount: Decimal | None = Field(default=None, ge=0)
     max_amount: Decimal | None = Field(default=None, ge=0)
-    order: Literal["newest", "oldest", "highest", "lowest"] = "newest"
+    order: Literal["newest", "oldest", "highest", "lowest"] = Field(
+        default="newest",
+        description="Sort by date or by amount / Orden por fecha o por monto",
+    )
 
     @model_validator(mode="after")
     def validate_amounts(self) -> Self:

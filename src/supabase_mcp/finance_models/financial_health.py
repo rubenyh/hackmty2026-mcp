@@ -26,7 +26,12 @@ class FinancialAlertsRequest(_ScopedRequest, Pagination):
     kinds: list[str] = Field(default_factory=list, max_length=20)
     account_ids: AccountIds = Field(default_factory=list)
     budget_ids: ResourceIds = Field(default_factory=list)
-    due_within_days: int | None = Field(default=None, ge=0, le=365)
+    due_within_days: int | None = Field(
+        default=None,
+        ge=0,
+        le=365,
+        description="Keep only alerts due inside this many days / Vencen en N dias",
+    )
 
 
 __all__ = ["FinancialAlertsRequest", "FinancialOverviewRequest"]
