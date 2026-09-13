@@ -12,27 +12,29 @@ from supabase_mcp.tools.finance._shared import _run
 
 
 async def get_debt_overview(request: DebtOverviewRequest, ctx: Context) -> ToolResult:
-    """Deudas y tarjetas de credito / Debts and credit-card balances owed.
+    """Summarize the outstanding debts the user owes, cards included.
 
-    Amounts owed, outstanding balances, interest rates, minimum payments, due
-    dates, credit utilization and the payoff scenarios stored against each
-    debt. Ranking scenarios belongs to compare_debt_scenarios, and a minimum
-    payment is data rather than advice. Claves: deuda, deudas, deudas
-    pendientes, debo, cuanto debo, debt, debts, outstanding debt, owed, credit
-    card debt, credit card balance.
+    Returns per debt the outstanding principal, interest rate, monthly payment
+    and next due date; per credit card the limit, current debt, statement
+    balance, minimum payment, cutoff, due date and utilization; totals owed by
+    currency; and optionally the payoff scenarios stored for each debt. Use it
+    when the user asks how much they owe. Ranking those scenarios against each
+    other belongs to compare_debt_scenarios, and a minimum payment is a
+    contractual amount rather than advice.
     """
     return await _run("get_debt_overview", request, ctx, get_debt_overview_data)
 
 
 async def compare_debt_scenarios(request: CompareDebtScenariosRequest, ctx: Context) -> ToolResult:
-    """Compara escenarios de pago de deuda / Compare saved debt payoff scenarios.
+    """Rank the stored payoff projections of one debt against each other.
 
-    Ranks the scenarios already stored against one debt by total interest,
-    monthly payment or payoff speed, against the baseline. Invents and persists
-    nothing, and needs a debt id produced by get_debt_overview. Claves:
-    comparar, compara, comparacion, escenario, escenarios, estrategia,
-    avalancha, bola de nieve, compare scenarios, payoff strategies, snowball,
-    avalanche.
+    Returns the saved scenarios of a single debt with their monthly payment,
+    extra payment, projected months to payoff, projected total interest and
+    total paid, the assumptions behind each projection, and the difference of
+    every scenario against the baseline, ordered by lowest total interest,
+    lowest monthly payment or fastest payoff. Use it when the user compares
+    payoff strategies such as paying extra each month. It needs a debt id from
+    get_debt_overview, computes no new projection and saves nothing.
     """
     return await _run("compare_debt_scenarios", request, ctx, compare_debt_scenarios_data)
 

@@ -56,28 +56,93 @@ FINANCIAL_NAMES = {
     "get_transaction_disputes",
     "compare_debt_scenarios",
 }
-# Baseline regenerated for progressive tool discovery: every financial
-# description was rewritten for BM25 retrieval and mutual disambiguation, and
-# ambiguous parameters gained Field descriptions. Names, request shapes and
-# structured results are unchanged — only the discovery text moved, which is
+# Baseline regenerated for the English metadata pass: every financial
+# description, display title and parameter description was rewritten in English
+# and the `Claves:` keyword lists were removed. Names, request shapes and
+# structured results are unchanged — only the model-facing text moved, which is
 # exactly what this guard is meant to make visible rather than silent.
 FINANCIAL_CONTRACT_HASHES = {
-    "analyze_spending": "1831adbc017e558d61a5c9b9df3f6e01bd1545b7b8c23b460379c83206809eeb",
-    "compare_debt_scenarios": "14fd880407b9457be41e7d4ff5ae504c5b5bac967e4c35b18874469f364ae27a",
-    "get_accounts": "ce178365d0c716666cb03d9d530e9f062019e540a96a3c3a38e855c6dcf2982d",
-    "get_bank_statements": "ac188c111c49e85b0098267058ee4a3184dec52684d5f1b15ced999d985dbfd1",
-    "get_beneficiaries": "fea659d07a9c068f6d85dd35ae94787e59516313649b28799a87abc51dc67521",
-    "get_budget_progress": "348f61f4d69e0aabcfb121e5e28267976fd4185a8deaf53eb20b018884d06a1f",
-    "get_cash_flow": "71d506b99fc8373d29e27ea4e4e0a8e6a84ca5bfc484a8ea19d08281d7d45c30",
-    "get_debt_overview": "7d56a6d907f71b91e6322f9ea37d4fdce00c80b372adad9d0f441c85379af3a9",
-    "get_financial_alerts": "1753d53775caba85da553b6765aa2cd9adee12d9569860c67553d670bf68d72b",
-    "get_financial_overview": "2799811cd8f34c513b4c46125fc77c97dc8779ec6d9bedd9fde6f9995bae0150",
-    "get_payment_activity": "bb459709075efe608d599aa55f181097eb22a571be8a324868cabb27a8243f34",
-    "get_savings_progress": "4282c2ec1080fad55b0422bf4177b94ad8ee4e08ad93da63b0c73a396e92208a",
-    "get_transaction_disputes": "6865aa35136892ba7554f8f0263393766f2c90d3574a77b774566b7d47fc51fd",
-    "get_transactions": "c232bd780f38780d4568bf51bbca7970f9f52202ad9b643568198c0ea12876cc",
-    "get_upcoming_payments": "f3a8cac17d944eef1e24a87ed6a496615f0196e89cd46fd3d87124cac42d6fc5",
+    "analyze_spending": "3b364a1a15f09a5ebfb7fef419d318a5b19a9694510b7c41a62830408e0bc541",
+    "compare_debt_scenarios": "5460ee9bcb1ddbe79ea25d55f025be4459f49cadda38ff981a1bd787aa62b23a",
+    "get_accounts": "f2d1e05dffd55cf5c56c370357739ed647ebf383cbb4b6947198e864482ae2c4",
+    "get_bank_statements": "9e08492e2abf6d47ada0bb8dc287663cafe113b8467533b60f74eff53ca99a2d",
+    "get_beneficiaries": "1fcb897bfef2b6b4bf579443340d3e19b9a7bc6aee96c8c05e7670e222681cf0",
+    "get_budget_progress": "d6478cd05d77441d77711e82c2398e874a3c460c9e4bda7d000478571d00ee33",
+    "get_cash_flow": "c49ace07aebae74e699870b2a5b77ae17472ef5b1418da553266c795945d9d71",
+    "get_debt_overview": "bcba3b53230cbde9eb6fc2c2561a80196025a0d43a9c568abd8a029c48908d8a",
+    "get_financial_alerts": "60264d2f6f50a4e3cb48013c0abf829e590f900a1936c94eba65a2ec69e1e737",
+    "get_financial_overview": "f2edcecfdef260c8613966191c451792cdba45677e8e0ac67e881d9323038e81",
+    "get_payment_activity": "8d2e7d72a92ae9af2f346d940b7e2817d49a7bd4f593f2a989f7ba3d38f0bd29",
+    "get_savings_progress": "ee84f89e64c379a69ab13def0be0054ead9084dd81c0e43ca9fdd45c263c9842",
+    "get_transaction_disputes": "39663c44a20bf9ec2971e85957ab4fbbc970379ca7a28c1c2b2d36bd48a54516",
+    "get_transactions": "de1b8f4ba980c7028f060e8cf0cf10b8c1b46d8cc17fbf748f73366cda4455f1",
+    "get_upcoming_payments": "8ba1e34777afb48cf0d2a86ed485ca5f853d2a56229cf26513c28cf7429fdf5c",
 }
+
+#: The whole permitted domain/capability vocabulary. `predictive` is project
+#: taxonomy for forward projection, not an MCP protocol hint.
+DOMAIN_TAGS = {
+    "accounts",
+    "transactions",
+    "expenses",
+    "cash-flow",
+    "budgets",
+    "savings",
+    "debts",
+    "analytics",
+    "predictive",
+    "actions",
+}
+
+#: Non-domain plumbing: infrastructure readiness, generic schema primitives and
+#: A2UI presentation. These are not banking capabilities and keep their own tags.
+PLUMBING_TAGS = {"a2ui", "actions", "charts", "infrastructure", "schema"}
+
+#: `compare_debt_scenarios` is the only tool whose payload is forward-looking:
+#: projected months to payoff and projected total interest under stored
+#: assumptions. Every other financial tool reports recorded state, and
+#: `analyze_spending`'s prior-period comparison is history, not a forecast.
+PREDICTIVE_TOOLS = {"compare_debt_scenarios"}
+
+#: Spanish vocabulary that must not reappear in model-facing metadata. The
+#: catalog is read by the model in English; the Spanish user query is translated
+#: on the way into tool search instead (see `supabase_mcp.discovery`).
+SPANISH_MARKERS = (
+    "claves",
+    "herramienta",
+    "cuenta",
+    "cuentas",
+    "saldo",
+    "tarjeta",
+    "gasto",
+    "gastos",
+    "deuda",
+    "deudas",
+    "presupuesto",
+    "ahorro",
+    "pagos",
+    "movimientos",
+    "aclaracion",
+    "beneficiarios",
+    "financiera",
+    "esquema",
+    "grafica",
+    "ambito",
+    "datos",
+    "para",
+)
+
+
+def _assert_english(text: str, where: str) -> None:
+    """Model-facing metadata must be English prose, not bilingual keyword text."""
+    assert text, f"{where} is empty"
+    assert text.isascii(), f"{where} carries non-ASCII text: {text!r}"
+    assert "Claves" not in text, f"{where} still carries a keyword list"
+    assert " / " not in text, f"{where} still looks bilingual"
+    words = {word.strip(".,;:()").casefold() for word in text.split()}
+    offenders = words.intersection(SPANISH_MARKERS)
+    assert not offenders, f"{where} carries Spanish words {sorted(offenders)}"
+
 
 DOMAIN_SYMBOLS = {
     "accounts": {
@@ -136,7 +201,7 @@ DOMAIN_SYMBOLS = {
 
 
 @pytest.mark.asyncio
-async def test_all_fifteen_tools_are_registered_with_bilingual_discovery_text(
+async def test_all_fifteen_tools_are_registered_with_english_discovery_text(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv(
@@ -160,7 +225,10 @@ async def test_all_fifteen_tools_are_registered_with_bilingual_discovery_text(
     assert all([tool.name for tool in listed_tools].count(name) == 1 for name in FINANCIAL_NAMES)
     for name in FINANCIAL_NAMES:
         description = listed[name].description or ""
-        assert "/" in description
+        _assert_english(description, f"{name} description")
+        # What it does, what it returns, and how it differs from its neighbours.
+        assert "Returns" in description, f"{name} never says what it returns"
+        assert "Use it" in description, f"{name} never says when to use it"
         schema = listed[name].input_schema
         assert "request" in schema["properties"]
         request_schema = schema["properties"]["request"]
@@ -170,6 +238,80 @@ async def test_all_fifteen_tools_are_registered_with_bilingual_discovery_text(
         assert "scope" in request_schema["properties"]
         assert listed[name].annotations is not None
         assert listed[name].annotations.read_only_hint is True
+
+
+@pytest.mark.asyncio
+async def test_every_financial_parameter_description_is_english(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Parameter text lives on the Pydantic request models, and is read by the model."""
+    monkeypatch.setenv(
+        "SUPABASE_DATABASE_URL",
+        "postgresql://reader:password@localhost/postgres?sslmode=require",
+    )
+    monkeypatch.setenv("MCP_ALLOWED_TABLES", "")
+    listed = {tool.name: tool.to_mcp_tool() for tool in await mcp._list_tools()}
+    for name in FINANCIAL_NAMES:
+        schema = listed[name].input_schema
+        for definition in schema.get("$defs", {}).values():
+            for field, info in definition.get("properties", {}).items():
+                description = info.get("description")
+                if description:
+                    _assert_english(description, f"{name}.{field} description")
+
+
+@pytest.mark.asyncio
+async def test_model_visible_titles_and_tags_follow_the_taxonomy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(
+        "SUPABASE_DATABASE_URL",
+        "postgresql://reader:password@localhost/postgres?sslmode=require",
+    )
+    monkeypatch.setenv("MCP_ALLOWED_TABLES", "")
+    registered = await mcp._list_tools()
+    predictive = set()
+    for tool in registered:
+        assert tool.tags <= DOMAIN_TAGS | PLUMBING_TAGS, f"{tool.name} has tags {tool.tags}"
+        if "predictive" in tool.tags:
+            predictive.add(tool.name)
+        if tool.name in FINANCIAL_NAMES:
+            # A financial capability is described only in domain vocabulary.
+            assert tool.tags <= DOMAIN_TAGS, f"{tool.name} has non-domain tags {tool.tags}"
+            assert tool.tags, f"{tool.name} has no domain tag"
+        listed = tool.to_mcp_tool()
+        if listed.annotations is not None and listed.annotations.title:
+            _assert_english(listed.annotations.title, f"{tool.name} title")
+    assert predictive == PREDICTIVE_TOOLS
+
+
+@pytest.mark.asyncio
+async def test_tool_annotations_match_what_the_tools_actually_do(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(
+        "SUPABASE_DATABASE_URL",
+        "postgresql://reader:password@localhost/postgres?sslmode=require",
+    )
+    monkeypatch.setenv("MCP_ALLOWED_TABLES", "")
+    listed = {tool.name: tool.to_mcp_tool() for tool in await mcp._list_tools()}
+    for name in FINANCIAL_NAMES | {"database_overview", "visualize_allowed_data"}:
+        annotations = listed[name].annotations
+        assert annotations is not None
+        assert annotations.read_only_hint is True, f"{name} claims to write"
+        assert annotations.destructive_hint is False
+        assert annotations.idempotent_hint is True
+        assert annotations.open_world_hint is False, f"{name} reads one allowlisted database"
+    # `a2ui_action` is the one write boundary. Repeating the exact same A2UI
+    # event is a no-op because `apply_a2ui_action` keeps a receipt per
+    # (user, request_key), but `budget.update` and `savings_goal.update`
+    # overwrite the fields of an existing row, which is a destructive update.
+    action = listed["a2ui_action"].annotations
+    assert action is not None
+    assert action.read_only_hint is False
+    assert action.destructive_hint is True
+    assert action.idempotent_hint is True
+    assert action.open_world_hint is False
 
 
 @pytest.mark.asyncio

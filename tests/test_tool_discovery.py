@@ -14,6 +14,7 @@ from supabase_mcp.discovery import (
     CALL_TOOL_NAME,
     SEARCH_MAX_RESULTS,
     SEARCH_TOOL_NAME,
+    _domain_terms,
     app_only,
 )
 from supabase_mcp.server import mcp
@@ -78,7 +79,48 @@ DISCOVERY_INTENTS = [
     ("transfers I made last month", "get_payment_activity"),
     ("any alerts I should know about", "get_financial_alerts"),
     ("how are my finances overall", "get_financial_overview"),
+    # English phrasings that do not repeat the metadata verbatim. The catalog is
+    # English now, so these have to work without the Spanish text that used to
+    # sit beside it.
+    ("which payoff strategy costs the least interest", "compare_debt_scenarios"),
+    ("saved payees I usually send money to", "get_beneficiaries"),
+    ("am I close to my budget limit", "get_budget_progress"),
+    ("money available in my accounts right now", "get_accounts"),
+    ("unrecognized charge on my card", "get_transaction_disputes"),
+    ("statement document for last month", "get_bank_statements"),
+    ("did my transfer go through", "get_payment_activity"),
+    ("what do I have to pay next week", "get_upcoming_payments"),
+    ("is there anything I should worry about", "get_financial_alerts"),
+    ("overall financial health", "get_financial_overview"),
+    ("how is my savings goal going", "get_savings_progress"),
+    ("income versus expenses trend", "get_cash_flow"),
+    ("my latest purchases", "get_transactions"),
+    ("how much did I spend on groceries", "analyze_spending"),
 ]
+
+#: Spanish vocabulary must not reappear in the catalog the model reads. Model
+#: metadata is English; the Spanish query is translated on the way in.
+SPANISH_MARKERS = (
+    "claves",
+    "herramienta",
+    "cuenta",
+    "cuentas",
+    "saldo",
+    "tarjetas",
+    "gastos",
+    "deudas",
+    "presupuesto",
+    "ahorro",
+    "pagos",
+    "movimientos",
+    "aclaracion",
+    "beneficiarios",
+    "financiera",
+    "esquema",
+    "grafica",
+    "datos",
+    "para",
+)
 
 
 @pytest.fixture(autouse=True)
@@ -118,6 +160,43 @@ async def test_financial_intent_ranks_its_tool_first(query: str, expected: str) 
     assert names, f"no tool matched {query!r}"
     assert names[0] == expected, f"{query!r} ranked {names} instead of {expected}"
     assert len(names) <= SEARCH_MAX_RESULTS
+
+
+async def test_every_model_visible_tool_advertises_english_metadata() -> None:
+    """The catalog BM25 indexes is the catalog the model reads, so it is English."""
+    registered = await mcp._list_tools()
+    visible = [tool for tool in registered if is_model_visible(tool)]
+
+    assert {tool.name for tool in visible} == FINANCIAL_TOOLS | {
+        "database_overview",
+        "visualize_allowed_data",
+    }
+    for tool in visible:
+        listed = tool.to_mcp_tool()
+        title = listed.annotations.title if listed.annotations else None
+        for label, text in (("description", listed.description), ("title", title)):
+            if label == "description":
+                assert text, f"{tool.name} has no description"
+            if not text:
+                continue
+            assert text.isascii(), f"{tool.name} {label} is not ASCII English: {text!r}"
+            assert "Claves" not in text, f"{tool.name} {label} still carries a keyword list"
+            assert " / " not in text, f"{tool.name} {label} still looks bilingual"
+            words = {word.strip(".,;:()").casefold() for word in text.split()}
+            assert not words.intersection(SPANISH_MARKERS), (
+                f"{tool.name} {label} carries Spanish words: {text!r}"
+            )
+
+
+def test_spanish_query_is_translated_into_the_english_catalog() -> None:
+    """Stopwords are dropped and domain words are expressed in catalog English."""
+    assert _domain_terms("cuanto gaste este mes") == "spent month"
+    assert _domain_terms("muestra mis deudas pendientes") == "muestra debts outstanding"
+    assert _domain_terms("¿cuál es mi flujo de efectivo?") == "cash flow"
+    # An English query is left alone apart from its function words.
+    assert _domain_terms("how much did I spend this month") == "spend month"
+    # A degenerate query still behaves exactly as it does upstream.
+    assert _domain_terms("de la que") == "de la que"
 
 
 async def test_search_never_returns_infrastructure_or_presentation_tools() -> None:

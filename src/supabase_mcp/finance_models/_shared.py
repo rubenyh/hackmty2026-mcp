@@ -36,8 +36,14 @@ class ResolvedDateRange(StrictModel):
 
 
 class Pagination(StrictModel):
-    limit: int = Field(default=50, ge=1, le=100)
-    cursor: str | None = Field(default=None, max_length=256)
+    limit: int = Field(
+        default=50, ge=1, le=100, description="Maximum rows to return in this page (1-100)."
+    )
+    cursor: str | None = Field(
+        default=None,
+        max_length=256,
+        description="Opaque next_cursor returned by the previous call; omit for the first page.",
+    )
 
 
 class MoneyAmount(StrictModel):
@@ -65,13 +71,27 @@ ResourceIds = Annotated[list[UUID], Field(max_length=100)]
 
 
 class _ScopedRequest(StrictModel):
-    scope: UserScope = Field(description="Trusted user scope / Ámbito de usuario confiable")
+    scope: UserScope = Field(
+        description=(
+            "Trusted user scope supplied by the application. Never invent, choose or change it."
+        )
+    )
 
 
 class _PeriodRequest(_ScopedRequest):
-    period: TimePeriod = TimePeriod.CURRENT_MONTH
-    start_date: date | None = None
-    end_date: date | None = None
+    period: TimePeriod = Field(
+        default=TimePeriod.CURRENT_MONTH,
+        description=(
+            "Named date range to report on, resolved in the user's timezone. "
+            "Use 'custom' only together with start_date and end_date."
+        ),
+    )
+    start_date: date | None = Field(
+        default=None, description="First day of a custom range, inclusive. Only with period=custom."
+    )
+    end_date: date | None = Field(
+        default=None, description="Last day of a custom range, inclusive. Only with period=custom."
+    )
 
     @model_validator(mode="after")
     def validate_custom_dates(self) -> Self:

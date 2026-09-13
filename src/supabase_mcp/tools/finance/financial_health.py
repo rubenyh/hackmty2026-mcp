@@ -15,23 +15,27 @@ from supabase_mcp.tools.finance._shared import _run
 
 
 async def get_financial_overview(request: FinancialOverviewRequest, ctx: Context) -> ToolResult:
-    """Resumen financiero general / Whole-picture financial overview.
+    """Summarize the whole financial picture of the user in one call.
 
-    Balances, budgets, savings goals, debts, upcoming obligations and alerts in
-    a single call. Covers the broad question; a narrow question belongs to the
-    narrow tool. Claves: resumen, panorama, panorama financiero, salud
-    financiera, finanzas en general, overall summary, financial health.
+    Returns per currency the available balance, income, expenses, net,
+    outstanding debt and savings totals for the period, plus active and
+    over-limit budget counts, the next obligation date and how many alerts are
+    active. Use it for broad questions about overall finances or financial
+    health. It answers with totals and counts, so a narrow question belongs to
+    the narrow tool that returns the underlying rows.
     """
     return await _run("get_financial_overview", request, ctx, get_financial_overview_data)
 
 
 async def get_financial_alerts(request: FinancialAlertsRequest, ctx: Context) -> ToolResult:
-    """Alertas y avisos financieros / Financial alerts and warnings.
+    """List the financial alerts and warnings already raised for the user.
 
-    Warnings filtered by kind, account, budget, urgency and due date:
-    overdraft risk, budget overruns, unusual charges and urgent dates. Claves:
-    alerta, alertas, aviso, avisos, advertencia, advertencias, riesgo, urgente,
-    alert, alerts, warning, warnings, risks.
+    Returns each alert with its kind, title, message, threshold amount, due
+    date and status, covering overdraft risk, budget overruns, unusual charges
+    and urgent dates, filtered by kind, account, budget, status and how soon it
+    is due. Use it when the user asks whether anything needs attention. It
+    reads stored alerts and derives none: budget detail belongs to
+    get_budget_progress and due dates to get_upcoming_payments.
     """
     return await _run("get_financial_alerts", request, ctx, get_financial_alerts_data)
 

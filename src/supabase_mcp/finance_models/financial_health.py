@@ -15,22 +15,35 @@ from supabase_mcp.finance_models._shared import (
 
 
 class FinancialOverviewRequest(_ScopedRequest):
-    period: Literal["current_month", "previous_month", "last_30_days", "current_year"] = (
-        "current_month"
+    period: Literal["current_month", "previous_month", "last_30_days", "current_year"] = Field(
+        default="current_month",
+        description="Named date range the income, expense and net totals cover.",
     )
-    account_ids: AccountIds = Field(default_factory=list)
+    account_ids: AccountIds = Field(
+        default_factory=list, description="Restrict to these account ids; empty means all accounts."
+    )
 
 
 class FinancialAlertsRequest(_ScopedRequest, Pagination):
-    status: Literal["active", "dismissed", "all"] = "active"
-    kinds: list[str] = Field(default_factory=list, max_length=20)
-    account_ids: AccountIds = Field(default_factory=list)
-    budget_ids: ResourceIds = Field(default_factory=list)
+    status: Literal["active", "dismissed", "all"] = Field(
+        default="active", description="Keep active alerts, dismissed ones, or all of them."
+    )
+    kinds: list[str] = Field(
+        default_factory=list,
+        max_length=20,
+        description="Restrict to these alert kinds, such as overdraft risk or budget overrun.",
+    )
+    account_ids: AccountIds = Field(
+        default_factory=list, description="Restrict to alerts of these account ids."
+    )
+    budget_ids: ResourceIds = Field(
+        default_factory=list, description="Restrict to alerts raised for these budget ids."
+    )
     due_within_days: int | None = Field(
         default=None,
         ge=0,
         le=365,
-        description="Keep only alerts due inside this many days / Vencen en N dias",
+        description="Keep only alerts whose due date falls inside this many days from today.",
     )
 
 

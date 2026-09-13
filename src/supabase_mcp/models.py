@@ -209,13 +209,29 @@ VisualizationSpec = Annotated[
 class VisualizeAllowedDataRequest(StrictModel):
     """Strict, bounded input for one domain-level visualization query."""
 
-    scope: UserScope
-    source: VisualizationSource
-    filters: list[FilterCondition] = Field(default_factory=list, max_length=20)
-    order: list[OrderBy] = Field(default_factory=list, max_length=4)
-    limit: int = Field(default=100, ge=1, le=500)
-    title: str | None = Field(default=None, max_length=100)
-    visualization: VisualizationSpec
+    scope: UserScope = Field(
+        description=(
+            "Trusted user scope supplied by the application. Never invent, choose or change it."
+        )
+    )
+    source: VisualizationSource = Field(
+        description="Allowlisted table or view the chart reads, as listed by database_overview."
+    )
+    filters: list[FilterCondition] = Field(
+        default_factory=list, max_length=20, description="Row filters applied before charting."
+    )
+    order: list[OrderBy] = Field(
+        default_factory=list,
+        max_length=4,
+        description="Sort order; only columns used by the visualization may be ordered.",
+    )
+    limit: int = Field(default=100, ge=1, le=500, description="Maximum rows to plot (1-500).")
+    title: str | None = Field(
+        default=None, max_length=100, description="Heading shown above the chart."
+    )
+    visualization: VisualizationSpec = Field(
+        description="Chart kind and the columns it maps: an area chart or a calendar heatmap."
+    )
 
     @model_validator(mode="after")
     def restrict_order_to_chart_columns(self) -> Self:

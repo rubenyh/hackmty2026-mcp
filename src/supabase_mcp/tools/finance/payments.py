@@ -17,37 +17,38 @@ from supabase_mcp.tools.finance._shared import _run
 
 
 async def get_upcoming_payments(request: UpcomingPaymentsRequest, ctx: Context) -> ToolResult:
-    """Proximos pagos y vencimientos / Upcoming payments and due dates.
+    """List the upcoming payments and due dates inside a forward window.
 
-    Scheduled charges inside a forward window: subscriptions, debt
-    installments, card cutoffs and payment orders. Future only; completed
-    payments belong to get_payment_activity. Claves: proximos pagos, pago,
-    pagos, vencimiento, vencimientos, suscripcion, suscripciones, upcoming
-    payments, due dates, scheduled charges, subscriptions.
+    Returns one dated item per obligation coming up - scheduled cash flows,
+    subscription renewals, debt installments, credit-card payments and pending
+    payment orders - with amount, currency, due date, status and source, plus
+    totals per currency. Use it when the user asks what they have to pay next.
+    Payments already made belong to get_payment_activity, and nothing here is
+    executed or scheduled.
     """
     return await _run("get_upcoming_payments", request, ctx, get_upcoming_payments_data)
 
 
 async def get_payment_activity(request: PaymentActivityRequest, ctx: Context) -> ToolResult:
-    """Transferencias y ordenes de pago historicas / Past transfers and payments.
+    """List the transfers and payment orders the user already made.
 
-    Transfers and payment orders already recorded. Read-only: it executes,
-    schedules and confirms nothing. Charges still ahead belong to
-    get_upcoming_payments. Claves: transferencia, transferencias, transferi,
-    envie dinero, pagos realizados, transfer, transfers, payment history,
-    payments made, sent money.
+    Returns the historical transfers and payment orders of a period with
+    amount, fee, currency, kind, status and dates, filtered by kind and status
+    and paginated. Use it to confirm that money was sent or a payment went
+    through. Charges still ahead belong to get_upcoming_payments and card
+    purchases to get_transactions. It is read-only and moves no money.
     """
     return await _run("get_payment_activity", request, ctx, get_payment_activity_data)
 
 
 async def get_beneficiaries(request: BeneficiariesRequest, ctx: Context) -> ToolResult:
-    """Beneficiarios y destinatarios guardados / Saved beneficiaries and payees.
+    """List the saved beneficiaries and payees of the user.
 
-    Safe display name, bank, masked last four digits and status per saved
-    recipient. Excludes CLABE and full account numbers, and sends no money.
-    Claves: beneficiario, beneficiarios, destinatario, destinatarios,
-    contactos guardados, beneficiary, beneficiaries, payee, payees, saved
-    recipients.
+    Returns per saved recipient a safe display name, bank, masked last four
+    digits and status, searchable by name fragment and paginated. Use it when
+    the user refers to someone they usually send money to. It sends no money
+    and never returns CLABE or full account numbers; past transfers belong to
+    get_payment_activity.
     """
     return await _run("get_beneficiaries", request, ctx, get_beneficiaries_data)
 

@@ -229,19 +229,42 @@ a tool that writes budgets and goals — appearing in search results is a wider
 boundary, not a narrower context.
 
 Ranking quality is a property of the descriptions. BM25 indexes tool names,
-descriptions and parameter names/descriptions, and carries no stemming and no
-stopword list, so a rare function word scores like a rare domain term and
+descriptions and top-level parameter names/descriptions — nested `$defs`
+descriptions are not indexed and cannot affect ranking — and carries no stemming
+and no stopword list, so a rare function word scores like a rare domain term and
 `"how are my finances"` ranks whichever tool happens to contain `are`.
-`LoggedBM25SearchTransform` therefore strips function words from the incoming
-query before delegating upstream — never from the index — and every financial
-description is written declaratively, with an explicit boundary against its
-nearest neighbour (`get_transactions` records against `analyze_spending`
-aggregates, `get_cash_flow` trend against `analyze_spending` breakdown,
+
+Two transformations therefore apply to the **incoming query only, never to the
+index**, both in `LoggedBM25SearchTransform._search` via `_domain_terms`:
+
+1. `_QUERY_STOPWORDS` drops Spanish and English function words, leaving ranking
+   to the domain nouns.
+2. `_QUERY_LEXICON` folds Spanish domain vocabulary onto the English terms the
+   catalog actually uses (`deudas` → `debts`, `gastos` → `expenses`), so a
+   Spanish query scores against an English catalog instead of scoring zero.
+
+Model-facing metadata is **English-only**. Every financial description is written
+declaratively with an explicit boundary against its nearest neighbour
+(`get_transactions` records against `analyze_spending` aggregates,
+`get_cash_flow` trend against `analyze_spending` breakdown,
 `get_upcoming_payments` future against `get_payment_activity` past,
-`get_debt_overview` amounts against `compare_debt_scenarios` ranking) and a
-bilingual keyword tail covering the singular and plural forms a user types.
+`get_debt_overview` amounts against `compare_debt_scenarios` ranking). There is
+no bilingual keyword tail: the earlier `Claves:` keyword lists were removed
+because query-side translation does the same work without contorting what the
+model reads. Parameter descriptions on the Pydantic request models in
+`finance_models/` are English for the same reason, and display titles come from
+`FINANCIAL_TOOL_TITLES` rather than a `"<Name> / Herramienta financiera"`
+pattern.
+
 Tags are registered for filtering and operator tooling; they are not indexed and
-do not affect ranking.
+do not affect ranking. The domain taxonomy is exactly `accounts`,
+`transactions`, `expenses`, `cash-flow`, `budgets`, `savings`, `debts`,
+`analytics`, `predictive` and `actions` (`server.py:FINANCIAL_TOOL_TAGS`);
+plumbing keeps `a2ui`, `actions`, `charts`, `schema` and `infrastructure`.
+`predictive` marks forward projection and therefore sits on
+`compare_debt_scenarios` alone — `analyze_spending`, `get_cash_flow`,
+`get_upcoming_payments` and `get_financial_alerts` report history or current
+state and are deliberately not tagged with it.
 
 FastMCP 4.0.3 has client-side handling for `notifications/tools/list_changed`
 but emits none from the server, and this server registers its whole catalog at
@@ -365,6 +388,8 @@ uv run mypy
 uv run python -c "from supabase_mcp.config import Settings; print('import ok')"
 ```
 
+A venv created before this repository was moved keeps an editable install pointing at the old path; see [README.md](README.md) § *Validate changes* for the `uv sync` / `PYTHONPATH=src` repair.
+
 The offline tests use FastMCP's in-memory client and an empty deny-all allowlist, so they exercise real `resources/list`, `resources/read`, `tools/list`, and `tools/call` serialization without Supabase credentials. They also build a wheel and verify the packaged JSON template. A server startup check with a non-empty allowlist remains a live integration check because configured objects are validated against PostgreSQL.
 
 ## Decisions
@@ -394,6 +419,8 @@ Update this file whenever source code, configuration, dependencies, public tool 
 `a2ui_actions/inputs.json` describes the Expo input subset; `actions.json` owns the input types, counts, context fields and submit labels for budget and savings-goal create/update/load. `tools/action_forms.py` prepares six Basic v0.9.1 surfaces using native TextField, DateTimeInput (date only), Slider and Button. The agent can prepare forms, but the model never receives the `a2ui_action` write tool. Only an explicit client submit routes there under the authenticated Supabase subject. A load action reads an owned record by exact name and fills its update form; duplicate names are rejected.
 
 Writes are the product-authorized exception to the original read-only scope. `DatabaseClient.apply_financial_action` is the only new database boundary. It uses optional `MCP_ACTIONS_DATABASE_URL`, a separate `fluidbank_actions` role and fixed `apply_a2ui_action` SQL. The original read pool, exact allowlists, read-only transactions and TLS requirements remain. Write configuration rejects privileged roles and requires `MCP_ACTIONS_SECRET` (at least 32 characters), shared only by the agent and MCP. The agent signs the complete A2UI event plus its verified user ID with HMAC-SHA256, overwriting any supplied proof. MCP verifies this signature before dispatching writes. Horizon authentication remains in place for remote access; the action proof independently prevents forged trustedScope from authorizing writes. Never give either service secret to Expo or the LLM. Replayed exact events remain idempotent through database receipts.
+
+`a2ui_action` declares that honestly in its `ToolAnnotations`: `readOnlyHint=false`, `destructiveHint=true` — `budget.update` and `savings_goal.update` overwrite the fields of an existing row rather than adding one — and `idempotentHint=true`, which is a real property and not aspirational: `apply_a2ui_action` records a receipt per `(user_id, request_key)` derived from the A2UI event itself, so the same event replayed returns the first result instead of writing twice. `a2ui_form`, which only reads current values and returns a surface, is annotated `readOnlyHint=true, destructiveHint=false`.
 
 The review/confirmation UI is the visible populated form and its explicit Crear/Guardar cambios button. No LLM call writes data. Context validation, exact action/surface/component allowlists, owner predicates and RLS reject other users' rows. Only budgets and savings_goals may be inserted/updated; no transfers, payments, balances, deletion, arbitrary SQL or executable JSON. The separate SQL migration adds a receipt keyed by user and event identity: the same event is idempotent, concurrent retries serialize, mismatched payloads conflict, and receipt plus mutation commit atomically. Network failures are reported as unconfirmed, not successful. New events after restarting the app are new operations; receipts do not deduplicate independently created forms.
 

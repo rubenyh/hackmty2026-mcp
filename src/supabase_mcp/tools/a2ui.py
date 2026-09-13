@@ -108,11 +108,12 @@ def _overview_tool_result(overview: DatabaseOverview) -> ToolResult:
 async def database_overview(
     ctx: Context, limit: OverviewLimit = DATABASE_OVERVIEW_DEFAULT_LIMIT
 ) -> ToolResult:
-    """Catalogo tecnico del esquema / Technical catalogue of the allowlisted schema.
+    """Show the technical catalogue of the allowlisted database schema.
 
-    Reflected PostgreSQL tables and views rendered as an A2UI surface, for
-    developer diagnostics. Schema metadata only: never balances, amounts, rows
-    or customer records, and never an answer about personal finances.
+    Returns the reflected PostgreSQL tables and views with their columns as an
+    A2UI surface, for developer diagnostics. Schema metadata only: never
+    balances, amounts, rows or customer records, and never an answer about
+    personal finances, which the financial tools own.
     """
     try:
         return _overview_tool_result(get_database_overview(_database(ctx), limit))
@@ -135,11 +136,13 @@ async def visualize_allowed_data(
     request: VisualizeAllowedDataRequest,
     ctx: Context,
 ) -> ToolResult:
-    """Grafica A2UI de area o mapa de calor / A2UI area or heatmap chart.
+    """Chart the numeric columns of one allowlisted table or view.
 
-    Numeric columns of one allowlisted table or view rendered as a chart.
-    Plots an already chosen source: it interprets no finances, picks no period
-    and decides no category. Charting step, never a retrieval step.
+    Returns an A2UI area chart or heatmap built from the requested source,
+    columns and title. Use it only as a final presentation step over a source
+    that has already been chosen: it interprets no finances, picks no period
+    and decides no category. Retrieval and analysis belong to the financial
+    tools.
     """
     try:
         result = await get_data_chart(_database(ctx), request)
