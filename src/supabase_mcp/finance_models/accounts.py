@@ -6,6 +6,7 @@ from datetime import date
 from typing import Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from supabase_mcp.finance_models._shared import AccountIds, Pagination, _ScopedRequest
 
@@ -27,7 +28,9 @@ class BankStatementsRequest(_ScopedRequest, Pagination):
     @model_validator(mode="after")
     def validate_dates(self) -> Self:
         if self.period_start and self.period_end and self.period_end < self.period_start:
-            raise ValueError("period_end must be on or after period_start")
+            raise PydanticCustomError(
+                "invalid_date_range", "period_end must be on or after period_start"
+            )
         return self
 
 

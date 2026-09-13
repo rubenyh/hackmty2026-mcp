@@ -186,6 +186,31 @@ Known request failures use stable public codes such as `object_not_allowed`, `co
 
 Visualization query failures raised by the database driver use the actionable, sanitized `database_error` result rather than falling through to a generic server failure. Protocol responses never include driver text, SQL statements, connection details, or stack traces.
 
+The fifteen financial tools share a stricter execution boundary. Every controlled
+failure is a `ToolResult` with `isError: true`; its fallback text is the same
+sanitized JSON object exposed in `structuredContent`. The stable codes are
+`VALIDATION_ERROR`, `INVALID_DATE_RANGE`, `INVALID_CURSOR`, `USER_SCOPE_ERROR`,
+`NOT_FOUND`, `DATABASE_UNAVAILABLE`, `DATABASE_TIMEOUT`,
+`DATABASE_PERMISSION_ERROR`, `DATABASE_QUERY_ERROR`, `DATA_MAPPING_ERROR`, and
+`INTERNAL_ERROR`. Each error also names the tool and internal operation, identifies
+the failing layer, marks retryability, offers a bounded suggestion, and carries a
+correlation ID. A FastMCP middleware validates only the registered financial
+request envelopes before dispatch so argument failures retain this structure and
+FastMCP does not log the rejected financial payload.
+
+Financial invocation logs contain the tool, operation, correlation ID, duration,
+outcome, and a safe row count when available. Failure logs retain traceback frames
+and the real exception type while replacing exception text, which may contain SQL,
+parameters, credentials, or connection details. Financial row bodies are never
+logged. Driver SQLSTATE classification distinguishes statement cancellation/timeouts,
+connection failures, permission failures, and other query failures.
+
+Literal-narrowed period request models compare the public period value rather than
+enum identity. `custom` therefore requires both dates and rejects inverted ranges
+for transactions, spending analysis, and cash flow. Dispute reads apply their
+optional period to `created_at` and do not issue an unfiltered transaction lookup
+when the dispute page is empty.
+
 Serialization preserves primitive JSON values, stringifies UUIDs and decimals, emits ISO-8601 date/time strings, converts enums through their values, Base64-encodes bytes, and recursively handles mappings and sequences. Unknown values fall back to strings.
 
 ## A2UI presentation boundary
@@ -277,6 +302,7 @@ The offline tests use FastMCP's in-memory client and an empty deny-all allowlist
 - **2026-09-12:** Added explicit protocol assertions that both A2UI resources are UTF-8 textual JSON validated by the registered v0.9.1 catalogs, checked every exposed input schema for JSON serialization, and removed startup stack-trace logging.
 - **2026-09-12:** Made MCP authoritative for Finance v2 BankingView, added one stable composed financial surface, registered `request_financial_view`, and separated trusted user scope from the five-field client action.
 - **2026-09-12:** Extended the canonical Finance v2 `BankingView` schema with the masked `PaymentCard` object (`cards` on `financial-summary`, `card` on `credit-card` and `card-security`) and the bounded credit-term projection (`creditLimit`, `statementBalance`, `cutoffDate`, `annualInterestRate`, `catPercentage`), and back-ported `totalOwnedBalance`, `totalSpent`, and `insight` so the packaged schema, the Agent's Pydantic mirror, and the client's Zod contract are byte-identical again. `get_accounts` and `get_debt_overview` already read `cards` and `credit_card_terms`, so no table, scope, or allowlist change was required.
+- **2026-09-12:** Added structured financial error taxonomy, redacted traceback logging and correlation IDs, pre-dispatch financial request validation, fixed Literal-based custom-period validation across all affected models, and applied the documented dispute period filter.
 
 ## Documentation maintenance
 

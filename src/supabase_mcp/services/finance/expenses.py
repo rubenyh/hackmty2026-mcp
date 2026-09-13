@@ -253,6 +253,9 @@ async def get_transaction_disputes_data(
     await _owned_accounts(database, request.scope, request.account_ids)
     await _require_owned_ids(database, request.scope, "transactions", "id", request.transaction_ids)
     filters = [*_filters_for_accounts("account_id", request.account_ids)]
+    if request.period is not None:
+        resolved = resolve_period(request.period, timezone_name=database.settings.timezone)
+        filters.extend(_period_filters("created_at", resolved, timestamp=True))
     if request.statuses:
         filters.append(
             FilterCondition(
@@ -293,21 +296,21 @@ async def get_transaction_disputes_data(
         offset=offset,
     )
     transaction_ids = [str(row["transaction_id"]) for row in disputes]
-    transactions, _ = await _select(
-        database,
-        request.scope,
-        "transactions",
-        ["id", "account_id", "amount", "direction", "category", "merchant", "occurred_at"],
-        filters=[
-            FilterCondition(
-                column="id",
-                operator=FilterOperator.IN,
-                value=cast(FilterValue, transaction_ids),
-            )
-        ]
-        if transaction_ids
-        else [],
-    )
+    transactions: list[dict[str, Any]] = []
+    if transaction_ids:
+        transactions, _ = await _select(
+            database,
+            request.scope,
+            "transactions",
+            ["id", "account_id", "amount", "direction", "category", "merchant", "occurred_at"],
+            filters=[
+                FilterCondition(
+                    column="id",
+                    operator=FilterOperator.IN,
+                    value=cast(FilterValue, transaction_ids),
+                )
+            ],
+        )
     by_id = {str(row["id"]): row for row in transactions}
     results = [{**row, "transaction": by_id.get(str(row["transaction_id"]))} for row in disputes]
     return {

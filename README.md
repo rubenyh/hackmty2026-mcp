@@ -147,6 +147,15 @@ Importing or inspecting the object does not load `Settings`, start a transport, 
 - `a2ui_action`: dispatches the five A2UI action fields through an explicit read-only allowlist, with trusted application scope carried separately. It supports bounded overview refresh and financial-view requests.
 - `a2ui_error`: safely acknowledges client rendering and validation reports without echoing their potentially sensitive message.
 
+The fifteen financial domain tools return structured failures with `isError: true`.
+Clients receive a stable uppercase error code, the tool and operation, a layer,
+retryability, a safe suggestion, and a correlation ID. Database failures distinguish
+unavailability, timeout, permission, query, and data-mapping problems. Public errors
+never include SQL, driver messages, connection strings, tokens, or tracebacks; use
+the correlation ID to find the corresponding redacted server log entry. Invalid
+financial request envelopes, custom date ranges, and cursors use the same transport
+shape instead of FastMCP's generic validation text.
+
 `select_rows` and `visualize_allowed_data` require `scope: {"user_id": "<seeded-demo-uuid>"}`. The scope is separate from caller-selected filters and is always combined with them using `AND`. `users`, `accessibility_preferences`, `accounts`, `subscriptions`, and `transfers` use direct ownership; `transactions` and `monthly_cash_flow` use an `EXISTS` relationship through `accounts`. Unknown demo users and allowlisted objects without a configured ownership rule fail closed. Ownership columns cannot be supplied as ordinary filters, and chart mappings cannot use them as visual data.
 
 `select_rows` supports `eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `in`, `like`, `ilike`, and `is_null`. Filter values are JSON scalars; `in` accepts a non-empty list of at most 100 scalars. The response includes `row_count`, the effective `limit`, `offset`, and a `truncated` flag. If no ordering is supplied, tables with primary keys are ordered by those keys.

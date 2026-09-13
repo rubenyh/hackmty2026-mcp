@@ -1,5 +1,24 @@
 """Public financial MCP tools and explicit registration collection."""
 
+from pydantic import BaseModel
+
+from supabase_mcp.finance_models import (
+    AccountsRequest,
+    BankStatementsRequest,
+    BeneficiariesRequest,
+    BudgetProgressRequest,
+    CashFlowRequest,
+    CompareDebtScenariosRequest,
+    DebtOverviewRequest,
+    FinancialAlertsRequest,
+    FinancialOverviewRequest,
+    PaymentActivityRequest,
+    SavingsProgressRequest,
+    SpendingAnalysisRequest,
+    TransactionDisputesRequest,
+    TransactionsRequest,
+    UpcomingPaymentsRequest,
+)
 from supabase_mcp.tools.finance.accounts import get_accounts, get_bank_statements
 from supabase_mcp.tools.finance.budgets import get_budget_progress
 from supabase_mcp.tools.finance.cash_flow import get_cash_flow
@@ -38,7 +57,26 @@ FINANCIAL_TOOLS = (
     compare_debt_scenarios,
 )
 
+FINANCIAL_REQUEST_MODELS: dict[str, type[BaseModel]] = {
+    "get_financial_overview": FinancialOverviewRequest,
+    "get_accounts": AccountsRequest,
+    "get_transactions": TransactionsRequest,
+    "analyze_spending": SpendingAnalysisRequest,
+    "get_cash_flow": CashFlowRequest,
+    "get_budget_progress": BudgetProgressRequest,
+    "get_savings_progress": SavingsProgressRequest,
+    "get_debt_overview": DebtOverviewRequest,
+    "get_upcoming_payments": UpcomingPaymentsRequest,
+    "get_financial_alerts": FinancialAlertsRequest,
+    "get_bank_statements": BankStatementsRequest,
+    "get_payment_activity": PaymentActivityRequest,
+    "get_beneficiaries": BeneficiariesRequest,
+    "get_transaction_disputes": TransactionDisputesRequest,
+    "compare_debt_scenarios": CompareDebtScenariosRequest,
+}
+
 __all__ = [
+    "FINANCIAL_REQUEST_MODELS",
     "FINANCIAL_TOOLS",
     "analyze_spending",
     "compare_debt_scenarios",

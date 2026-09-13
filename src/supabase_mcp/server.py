@@ -48,6 +48,8 @@ from supabase_mcp.tools import (
     visualize_allowed_data,
 )
 from supabase_mcp.tools.action_forms import a2ui_form
+from supabase_mcp.tools.finance import FINANCIAL_REQUEST_MODELS
+from supabase_mcp.tools.finance._shared import FinancialValidationMiddleware
 
 
 def load_settings() -> Settings:
@@ -98,6 +100,7 @@ def action_contract_resource() -> str:
 
 mcp.resource("a2ui://actions/inputs", mime_type="application/json")(input_contract_resource)
 mcp.resource("a2ui://actions/registry", mime_type="application/json")(action_contract_resource)
+mcp.add_middleware(FinancialValidationMiddleware(FINANCIAL_REQUEST_MODELS))
 mcp.tool(health_check)
 mcp.tool(list_allowed_tables)
 mcp.tool(describe_table)

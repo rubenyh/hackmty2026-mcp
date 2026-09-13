@@ -9,6 +9,7 @@ from typing import Annotated, Literal, Self
 from uuid import UUID
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from supabase_mcp.models import StrictModel, UserScope
 
@@ -74,11 +75,22 @@ class _PeriodRequest(_ScopedRequest):
 
     @model_validator(mode="after")
     def validate_custom_dates(self) -> Self:
-        if self.period is TimePeriod.CUSTOM:
+        # Subclasses intentionally narrow ``period`` with Literal values, so
+        # Pydantic may store the public string rather than a TimePeriod member.
+        # Normalizing to the public value accepts both representations; identity does not.
+        if str(self.period) == TimePeriod.CUSTOM.value:
             if self.start_date is None or self.end_date is None:
-                raise ValueError("custom / personalizado requires start_date and end_date")
+                raise PydanticCustomError(
+                    "invalid_date_range",
+                    "custom / personalizado requires start_date and end_date",
+                )
             if self.end_date < self.start_date:
-                raise ValueError("end_date must be on or after start_date")
+                raise PydanticCustomError(
+                    "invalid_date_range", "end_date must be on or after start_date"
+                )
         elif self.start_date is not None or self.end_date is not None:
-            raise ValueError("start_date and end_date are only valid for custom / personalizado")
+            raise PydanticCustomError(
+                "invalid_date_range",
+                "start_date and end_date are only valid for custom / personalizado",
+            )
         return self
