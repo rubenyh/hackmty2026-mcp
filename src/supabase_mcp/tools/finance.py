@@ -7,7 +7,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any, TypeVar
 
 from fastmcp import Context
-from fastmcp.tools.tool import ToolResult
+from fastmcp.tools import ToolResult
 from mcp.types import TextContent
 from pydantic import BaseModel
 from sqlalchemy.exc import SQLAlchemyError
