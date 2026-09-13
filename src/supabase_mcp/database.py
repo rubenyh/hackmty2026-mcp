@@ -71,6 +71,22 @@ TABLE_USER_SCOPES: dict[tuple[str, str], TableUserScope] = {
     ("public", "users"): DirectScope(column="id"),
     ("public", "accessibility_preferences"): DirectScope(column="user_id"),
     ("public", "accounts"): DirectScope(column="user_id"),
+    ("public", "account_details"): DirectScope(column="user_id"),
+    ("public", "cards"): DirectScope(column="user_id"),
+    ("public", "credit_card_terms"): DirectScope(column="user_id"),
+    ("public", "debts"): DirectScope(column="user_id"),
+    ("public", "debt_scenarios"): DirectScope(column="user_id"),
+    ("public", "budgets"): DirectScope(column="user_id"),
+    ("public", "budget_progress"): DirectScope(column="user_id"),
+    ("public", "savings_goals"): DirectScope(column="user_id"),
+    ("public", "savings_goal_progress"): DirectScope(column="user_id"),
+    ("public", "savings_contributions"): DirectScope(column="user_id"),
+    ("public", "scheduled_cash_flows"): DirectScope(column="user_id"),
+    ("public", "beneficiaries"): DirectScope(column="user_id"),
+    ("public", "payment_orders"): DirectScope(column="user_id"),
+    ("public", "transaction_disputes"): DirectScope(column="user_id"),
+    ("public", "bank_statements"): DirectScope(column="user_id"),
+    ("public", "financial_alerts"): DirectScope(column="user_id"),
     ("public", "transactions"): JoinScope(
         local_column="account_id",
         owner_schema="public",
@@ -299,6 +315,12 @@ class DatabaseClient:
 
     def build_select(self, request: SelectRequest) -> tuple[Select[Any], int]:
         """Validate a request and build a parameterized SQLAlchemy SELECT."""
+        return self._build_select(request, allow_scope_column_filters=False)
+
+    def _build_select(
+        self, request: SelectRequest, *, allow_scope_column_filters: bool
+    ) -> tuple[Select[Any], int]:
+        """Build a select, optionally accepting service-validated ownership IDs."""
         reflected = self._require_object(request.schema_name, request.table)
         table = reflected.table
         limit = request.limit if request.limit is not None else self.settings.default_limit
@@ -322,7 +344,9 @@ class DatabaseClient:
             selected_columns = self._require_columns(table, request.columns)
 
         control_columns = self.user_scope_columns(request.schema_name, request.table)
-        if any(condition.column in control_columns for condition in request.filters):
+        if not allow_scope_column_filters and any(
+            condition.column in control_columns for condition in request.filters
+        ):
             raise InvalidSelectionError(
                 "ownership_filter_not_allowed",
                 "Ownership columns are controlled by the application user scope.",
@@ -433,6 +457,27 @@ class DatabaseClient:
     async def select_rows(self, request: SelectRequest) -> tuple[list[dict[str, Any]], int, bool]:
         """Execute a validated selection in a bounded read-only transaction."""
         statement, limit = self.build_select(request)
+        engine = self._require_engine()
+        async with engine.connect() as connection:
+            async with connection.begin():
+                await self._configure_transaction(connection)
+                await self._validate_user_scope(connection, request.scope)
+                result = await connection.execute(statement)
+                mappings = result.mappings().all()
+        truncated = len(mappings) > limit
+        rows = [serialize_row(dict(row)) for row in mappings[:limit]]
+        return rows, limit, truncated
+
+    async def select_domain_rows(
+        self, request: SelectRequest
+    ) -> tuple[list[dict[str, Any]], int, bool]:
+        """Execute an internal domain read after its referenced IDs were ownership-checked.
+
+        This is deliberately not exposed as an MCP tool. Domain services may add
+        account filters that the generic model-facing selector rejects, while the
+        canonical user-scope predicate remains mandatory in the same SQL statement.
+        """
+        statement, limit = self._build_select(request, allow_scope_column_filters=True)
         engine = self._require_engine()
         async with engine.connect() as connection:
             async with connection.begin():

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from typing import Annotated, Literal
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
@@ -44,6 +45,7 @@ class Settings(BaseSettings):
     statement_timeout_ms: int = Field(
         default=5_000, ge=100, le=60_000, validation_alias="MCP_STATEMENT_TIMEOUT_MS"
     )
+    timezone: str = Field(default="America/Monterrey", validation_alias="MCP_TIMEZONE")
     transport: Literal["stdio", "http"] = Field(default="stdio", validation_alias="MCP_TRANSPORT")
     host: str = Field(default="127.0.0.1", min_length=1, validation_alias="MCP_HOST")
     port: int = Field(default=8_000, ge=1, le=65_535, validation_alias="MCP_PORT")
@@ -82,6 +84,15 @@ class Settings(BaseSettings):
         sslmode = url.query.get("sslmode")
         if sslmode is not None and sslmode not in {"require", "verify-ca", "verify-full"}:
             raise ValueError("SUPABASE_DATABASE_URL sslmode must require or verify TLS")
+        return value
+
+    @field_validator("timezone")
+    @classmethod
+    def validate_timezone(cls, value: str) -> str:
+        try:
+            ZoneInfo(value)
+        except ZoneInfoNotFoundError as exc:
+            raise ValueError("MCP_TIMEZONE must be a valid IANA timezone") from exc
         return value
 
     @model_validator(mode="after")

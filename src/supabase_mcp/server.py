@@ -27,6 +27,7 @@ from supabase_mcp.a2ui_support.surfaces import (
 from supabase_mcp.config import Settings
 from supabase_mcp.database import DatabaseClient
 from supabase_mcp.tools import (
+    FINANCIAL_TOOLS,
     a2ui_action,
     a2ui_error,
     chat_message,
@@ -70,6 +71,17 @@ mcp.tool(health_check)
 mcp.tool(list_allowed_tables)
 mcp.tool(describe_table)
 mcp.tool(select_rows)
+for financial_tool in FINANCIAL_TOOLS:
+    mcp.tool(
+        financial_tool,
+        annotations=ToolAnnotations(
+            title=f"{financial_tool.__name__.replace('_', ' ').title()} / Herramienta financiera",
+            read_only_hint=True,
+            destructive_hint=False,
+            idempotent_hint=True,
+            open_world_hint=False,
+        ),
+    )
 mcp.tool(
     database_overview,
     meta=ui_metadata(DATABASE_OVERVIEW_SURFACE),

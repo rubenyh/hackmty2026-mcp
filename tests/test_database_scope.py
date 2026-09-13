@@ -24,7 +24,7 @@ USER_A = "68dc4d66-07b8-5893-95f1-07f06989a552"
 
 
 def test_ownership_registry_covers_every_seeded_data_object() -> None:
-    assert TABLE_USER_SCOPES == {
+    expected = {
         ("public", "users"): DirectScope("id"),
         ("public", "accessibility_preferences"): DirectScope("user_id"),
         ("public", "accounts"): DirectScope("user_id"),
@@ -34,7 +34,24 @@ def test_ownership_registry_covers_every_seeded_data_object() -> None:
         ("public", "monthly_cash_flow"): JoinScope(
             "account_id", "public", "accounts", "id", "user_id"
         ),
+        ("public", "account_details"): DirectScope("user_id"),
+        ("public", "cards"): DirectScope("user_id"),
+        ("public", "credit_card_terms"): DirectScope("user_id"),
+        ("public", "debts"): DirectScope("user_id"),
+        ("public", "debt_scenarios"): DirectScope("user_id"),
+        ("public", "budgets"): DirectScope("user_id"),
+        ("public", "budget_progress"): DirectScope("user_id"),
+        ("public", "savings_goals"): DirectScope("user_id"),
+        ("public", "savings_goal_progress"): DirectScope("user_id"),
+        ("public", "savings_contributions"): DirectScope("user_id"),
+        ("public", "scheduled_cash_flows"): DirectScope("user_id"),
+        ("public", "beneficiaries"): DirectScope("user_id"),
+        ("public", "payment_orders"): DirectScope("user_id"),
+        ("public", "transaction_disputes"): DirectScope("user_id"),
+        ("public", "bank_statements"): DirectScope("user_id"),
+        ("public", "financial_alerts"): DirectScope("user_id"),
     }
+    assert TABLE_USER_SCOPES == expected
 
 
 def _client() -> DatabaseClient:
