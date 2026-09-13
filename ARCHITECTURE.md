@@ -37,11 +37,13 @@ src/
     config.py         Environment parsing, normalization, and validation
     database.py       Engine lifecycle, reflection, query construction, and execution
     errors.py         Internal safe error types
-    models.py         Strict tool inputs and structured results
+    models.py         Strict generic tool inputs and structured results
+    finance_models/   Strict financial contracts grouped by domain
     serialization.py  PostgreSQL-to-JSON-safe conversion
     server.py         Event-loop setup, FastMCP lifespan, registration, and entry point
     services/
       database_overview.py  Bounded presentation-independent overview use case
+      finance/        Financial rules and coordinated reads grouped by domain
     a2ui_support/
       constants.py    v0.9.1, MIME, catalog, action, and stable URI identifiers
       models.py       Immutable SurfaceSpec
@@ -57,6 +59,7 @@ src/
         financial_view.json     Stable BankingView/Button composition
     tools/
       a2ui.py         Overview, generic action/error, and resource handlers
+      finance/        Thin financial MCP handlers and explicit registration tuple
       health.py       Sanitized database readiness check
       schema.py       Allowlisted object discovery and description
       select.py       Structured bounded selection
@@ -72,6 +75,37 @@ uv.lock             Locked dependency graph
 ```
 
 No `app_agent/` or `sql/` directory is present. Hatch packages `src/supabase_mcp/`, including JSON templates under the package, and the installed `supabase-mcp` command calls `supabase_mcp.server:main`.
+
+## Financial domain organization
+
+Financial code is split into matching model, service, and tool modules. The package
+`__init__.py` files are compatibility facades for the former
+`supabase_mcp.finance_models`, `supabase_mcp.services.finance`, and
+`supabase_mcp.tools.finance` import paths. Shared ownership-safe selection, period,
+currency, and cursor helpers live in `services/finance/_shared.py`; shared request
+bases and value objects live in `finance_models/_shared.py`.
+
+| Domain | Tool module | Service module | Models module | Responsibility |
+|---|---|---|---|---|
+| Accounts | `tools/finance/accounts.py` | `services/finance/accounts.py` | `finance_models/accounts.py` | Accounts, masked cards, credit terms, and statement metadata |
+| Expenses | `tools/finance/expenses.py` | `services/finance/expenses.py` | `finance_models/expenses.py` | Transactions, spending analysis, and disputes |
+| Cash flow | `tools/finance/cash_flow.py` | `services/finance/cash_flow.py` | `finance_models/cash_flow.py` | Monthly income, expenses, and net series |
+| Budgets | `tools/finance/budgets.py` | `services/finance/budgets.py` | `finance_models/budgets.py` | Stored budget-progress projections |
+| Savings | `tools/finance/savings.py` | `services/finance/savings.py` | `finance_models/savings.py` | Savings goals and optional contributions |
+| Debts | `tools/finance/debts.py` | `services/finance/debts.py` | `finance_models/debts.py` | Debt/card overview and saved scenario comparison |
+| Payments | `tools/finance/payments.py` | `services/finance/payments.py` | `finance_models/payments.py` | Upcoming obligations, payment activity, and beneficiaries |
+| Financial health | `tools/finance/financial_health.py` | `services/finance/financial_health.py` | `finance_models/financial_health.py` | Cross-domain overview and financial alerts |
+
+Location rule:
+
+- Change an MCP name, description, parameter boundary, or handler delegation in
+  `tools/finance/<domain>.py`.
+- Change a calculation, aggregation, or coordinated database read in
+  `services/finance/<domain>.py`.
+- Change a financial Pydantic schema, enum, or value object in
+  `finance_models/<domain>.py` or the narrowly shared `_shared.py`.
+- Change the public financial registration set or order in
+  `tools/finance/__init__.py`; `server.py` registers only that explicit tuple.
 
 ## Demo schema and seed data
 
@@ -231,6 +265,7 @@ The offline tests use FastMCP's in-memory client and an empty deny-all allowlist
 
 ## Decisions
 
+- **2026-09-12:** Split the fifteen financial tools, services, and request models into eight cohesive domain modules, retained the three former import paths as explicit compatibility facades, and kept one explicit duplicate-checked registration tuple.
 - **2026-09-09:** Created a constrained read-only FastMCP/Supabase service.
 - **2026-09-11:** Documented the repository as the MCP-only implementation present in the tree and removed stale agent/provider, UI, test-suite, SQL-script, and `src/`-layout claims from the documentation and example environment.
 - **2026-09-12:** Added mandatory typed demo-user scope, explicit direct/join ownership rules, fail-closed row queries, and ownership-safe chart mapping.
