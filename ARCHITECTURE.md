@@ -117,7 +117,7 @@ Location rule:
 
 `monthly_cash_flow` answers "income vs. expenses" directly: one row per account per calendar month, summing `transactions.amount` by `direction` (`credit` = income, `debit` = expenses) plus a `net` column. It's created `WITH (security_invoker = true)` so it inherits the querying role's RLS instead of the view owner's privileges, and `mcp_reader` has an explicit `GRANT SELECT` on it (views need that in addition to RLS).
 
-The `mcp_reader` Postgres role is a dedicated, `SELECT`-only login (via per-table RLS policies scoped to that role) created directly in Supabase, separate from this repository's tracked migrations. `SUPABASE_DATABASE_URL` uses the session pooler (`aws-0-ca-central-1.pooler.supabase.com:5432`, username `mcp_reader.<project_ref>`) rather than the direct `db.<ref>.supabase.co` host, which is IPv6-only and fails to resolve on IPv4-only networks.
+The `mcp_reader` Postgres role is a dedicated, `SELECT`-only login created directly in Supabase. The action migration versions the policies needed by the A2UI form tables. `DatabaseClient` sets the verified subject locally in every scoped read transaction, and those policies compare it with each row's owner in addition to the query's mandatory ownership predicate. `SUPABASE_DATABASE_URL` uses the session pooler (`aws-0-ca-central-1.pooler.supabase.com:5432`, username `mcp_reader.<project_ref>`) rather than the direct `db.<ref>.supabase.co` host, which is IPv6-only and fails to resolve on IPv4-only networks.
 
 ## Configuration boundary
 

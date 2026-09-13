@@ -597,6 +597,7 @@ class DatabaseClient:
         async with engine.connect() as connection:
             async with connection.begin():
                 await self._configure_transaction(connection)
+                await self._configure_user_scope(connection, request.scope)
                 await self._validate_user_scope(connection, request.scope)
                 result = await connection.execute(statement)
                 mappings = result.mappings().all()
@@ -618,12 +619,21 @@ class DatabaseClient:
         async with engine.connect() as connection:
             async with connection.begin():
                 await self._configure_transaction(connection)
+                await self._configure_user_scope(connection, request.scope)
                 await self._validate_user_scope(connection, request.scope)
                 result = await connection.execute(statement)
                 mappings = result.mappings().all()
         truncated = len(mappings) > limit
         rows = [serialize_row(dict(row)) for row in mappings[:limit]]
         return rows, limit, truncated
+
+    @staticmethod
+    async def _configure_user_scope(connection: AsyncConnection, scope: UserScope) -> None:
+        """Place the verified subject in the current transaction for RLS policies."""
+        await connection.execute(
+            text("select set_config('request.jwt.claim.sub', :uid, true)"),
+            {"uid": str(scope.user_id)},
+        )
 
     async def _validate_user_scope(self, connection: AsyncConnection, scope: UserScope) -> None:
         """Require the scoped id to be a real application user.
