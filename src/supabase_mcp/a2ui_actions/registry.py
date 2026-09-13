@@ -93,12 +93,24 @@ class GoalUpdate(GoalContext):
 
 
 class TransferContext(StrictModel):
-    source_account: str = Field(min_length=1, max_length=120)
-    recipient: str = Field(min_length=1, max_length=120)
+    source_account: list[str] = Field(min_length=1, max_length=1)
+    recipient: list[str] = Field(min_length=1, max_length=1)
     amount: Amount = Field(gt=0, le=100_000)
     concept: str = Field(min_length=1, max_length=140)
 
-    @field_validator("source_account", "recipient", "concept")
+    @field_validator("source_account", "recipient", mode="before")
+    @classmethod
+    def accept_legacy_single_choice(cls, value: object) -> object:
+        return [value] if isinstance(value, str) else value
+
+    @field_validator("source_account", "recipient")
+    @classmethod
+    def valid_choice(cls, value: list[str]) -> list[str]:
+        if not value[0].strip() or len(value[0]) > 120:
+            raise ValueError("Selecciona una opción válida.")
+        return [value[0].strip()]
+
+    @field_validator("concept")
     @classmethod
     def nonblank_text(cls, value: str) -> str:
         if not value.strip():

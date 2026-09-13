@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from fastmcp.tools import ToolResult
@@ -58,11 +58,25 @@ class A2UIResponseFactory:
         data_model: Mapping[str, Any],
         structured_content: Mapping[str, Any] | None = None,
         path: str = "/",
+        component_updates: Sequence[Mapping[str, Any]] = (),
     ) -> ToolResult:
-        """Return a complete MCP result for both A2UI and non-A2UI clients."""
+        """Return a complete MCP result for both A2UI and non-A2UI clients.
+
+        ``component_updates`` is reserved for runtime choices whose safe labels
+        come from the authenticated user's data. Static layout remains in the
+        cached resource; only the affected components are replaced per call.
+        """
         if not fallback_text.strip():
             raise A2UIValidationError("A2UI fallback text must not be empty")
         update = self.update_data_model(data_model, path)
+        dynamic_messages: list[dict[str, Any]] = []
+        for raw_message in component_updates:
+            safe_message = to_json_safe(raw_message)
+            if not isinstance(safe_message, dict):
+                raise A2UIValidationError("A2UI component update must be an object")
+            self._validator.validate_message(safe_message, self.surface)
+            dynamic_messages.append(safe_message)
+        dynamic_messages.append(update)
         structured_source = structured_content if structured_content is not None else data_model
         structured = to_json_safe(structured_source)
         if not isinstance(structured, dict):
@@ -72,9 +86,11 @@ class A2UIResponseFactory:
                 TextContent(text=fallback_text),
                 EmbeddedResource(
                     resource=TextResourceContents(
-                        uri=f"{self.surface.resource_uri}/data",
-                        mime_type=A2UI_MIME_TYPE,
-                        text=json.dumps([update], ensure_ascii=False, separators=(",", ":")),
+                    uri=f"{self.surface.resource_uri}/data",
+                    mime_type=A2UI_MIME_TYPE,
+                    text=json.dumps(
+                        dynamic_messages, ensure_ascii=False, separators=(",", ":")
+                    ),
                     ),
                     annotations=Annotations(audience=["user"]),
                 ),

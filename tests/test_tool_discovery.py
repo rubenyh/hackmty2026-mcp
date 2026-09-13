@@ -37,6 +37,7 @@ APP_ONLY_TOOLS = {
 FINANCIAL_TOOLS = {
     "get_financial_overview",
     "get_accounts",
+    "get_credit_cards",
     "get_transactions",
     "analyze_spending",
     "get_cash_flow",
@@ -74,6 +75,7 @@ DISCOVERY_INTENTS = [
     ("what payments are coming up", "get_upcoming_payments"),
     ("proximos pagos", "get_upcoming_payments"),
     ("cuanto dinero tengo en mis cuentas", "get_accounts"),
+    ("muestrame mi tarjeta de credito", "get_credit_cards"),
     ("I don't recognize this charge", "get_transaction_disputes"),
     ("quiero una aclaracion", "get_transaction_disputes"),
     ("compare payoff strategies for my debt", "compare_debt_scenarios"),

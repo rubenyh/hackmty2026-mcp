@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
@@ -17,6 +17,13 @@ class AccountsRequest(_ScopedRequest):
     include_cards: bool = True
     include_credit_terms: bool = True
     status: str | None = Field(default=None, max_length=50)
+
+
+class CreditCardsRequest(_ScopedRequest):
+    """Filters for the user's credit-card portfolio."""
+
+    account_ids: AccountIds = Field(default_factory=list)
+    status: Literal["active", "blocked", "inactive"] | None = None
 
 
 class BankStatementsRequest(_ScopedRequest, Pagination):
@@ -34,4 +41,4 @@ class BankStatementsRequest(_ScopedRequest, Pagination):
         return self
 
 
-__all__ = ["AccountsRequest", "BankStatementsRequest"]
+__all__ = ["AccountsRequest", "BankStatementsRequest", "CreditCardsRequest"]

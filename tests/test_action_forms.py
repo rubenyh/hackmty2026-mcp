@@ -1,6 +1,9 @@
 """Offline coverage for form contracts, ownership, validation and write results."""
 
+import json
+
 import pytest
+from mcp.types import EmbeddedResource
 from pydantic import SecretStr, ValidationError
 
 from supabase_mcp.a2ui_actions.registry import ACTIONS, CONTEXTS
@@ -197,6 +200,22 @@ async def test_transfer_and_card_payment_dispatch_as_bounded_writes():
     )
     assert payment.structured_content["actionResult"]["message"].startswith("Pago aplicado")
     assert [call[0] for call in db.calls] == ["transfer.execute", "credit_card.pay"]
+
+
+async def test_transfer_form_exposes_current_contacts_as_single_choice_options():
+    result = await prepare_form("transfer.execute", FakeDatabase(), UserScope(user_id=UID))
+
+    assert result.structured_content["form"]["source_account"] == ["Cuenta principal"]
+    assert result.structured_content["form"]["recipient"] == ["Ana"]
+    embedded = next(item for item in result.content if isinstance(item, EmbeddedResource))
+    messages = json.loads(embedded.resource.text)
+    components = messages[0]["updateComponents"]["components"]
+    recipient = next(component for component in components if component["id"] == "recipient")
+    assert recipient["component"] == "ChoicePicker"
+    assert recipient["options"][0] == {
+        "label": "Ana · Banco receptor · •••• 4321",
+        "value": "Ana",
+    }
 
 
 async def test_card_payment_form_contains_masked_card_preview_and_prefilled_choices():

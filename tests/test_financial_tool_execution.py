@@ -24,6 +24,7 @@ from supabase_mcp.finance_models import (
     BudgetProgressRequest,
     CashFlowRequest,
     CompareDebtScenariosRequest,
+    CreditCardsRequest,
     DebtOverviewRequest,
     FinancialAlertsRequest,
     FinancialOverviewRequest,
@@ -36,6 +37,7 @@ from supabase_mcp.finance_models import (
 )
 from supabase_mcp.models import SelectRequest
 from supabase_mcp.server import mcp
+from supabase_mcp.services.finance.accounts import get_credit_cards_data
 from supabase_mcp.services.finance.expenses import get_transaction_disputes_data
 from supabase_mcp.tools.finance import (
     FINANCIAL_REQUEST_MODELS,
@@ -47,6 +49,7 @@ from supabase_mcp.tools.finance import (
     get_beneficiaries,
     get_budget_progress,
     get_cash_flow,
+    get_credit_cards,
     get_debt_overview,
     get_financial_alerts,
     get_financial_overview,
@@ -100,6 +103,61 @@ class ScopeFailureDatabase(DatabaseClient):
         raise InvalidSelectionError("unknown_user_id", "The selected user is not configured.")
 
 
+class CreditCardDatabase(EmptyDomainDatabase):
+    async def select_domain_rows(
+        self, request: SelectRequest
+    ) -> tuple[list[dict[str, Any]], int, bool]:
+        self.requests.append(request)
+        rows = {
+            "accounts": [
+                {
+                    "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                    "account_type": "credit",
+                    "currency": "MXN",
+                    "available_balance": 2500,
+                }
+            ],
+            "account_details": [
+                {
+                    "account_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                    "display_name": "Crédito Oro",
+                    "bank_name": "Banorte",
+                    "last_four": "9999",
+                }
+            ],
+            "cards": [
+                {
+                    "id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                    "account_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                    "display_name": "Crédito Oro",
+                    "card_type": "credit",
+                    "network": "visa",
+                    "last_four": "1234",
+                    "status": "active",
+                    "expires_month": 12,
+                    "expires_year": 2030,
+                }
+            ],
+            "credit_card_terms": [
+                {
+                    "account_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                    "currency": "MXN",
+                    "credit_limit": 10000,
+                    "current_debt": 7500,
+                    "statement_balance": 6200,
+                    "minimum_payment": 400,
+                    "interest_free_payment": 6200,
+                    "annual_interest_rate": 42,
+                    "cat_percentage": 53.2,
+                    "cutoff_date": "2026-09-01",
+                    "due_date": "2026-09-25",
+                    "as_of": "2026-09-13",
+                }
+            ],
+        }.get(request.table, [])
+        return rows, request.limit or self.settings.default_limit, False
+
+
 def _context(database: DatabaseClient, correlation_id: str = "test-correlation") -> Any:
     return SimpleNamespace(
         lifespan_context={"database": database},
@@ -111,6 +169,7 @@ def _context(database: DatabaseClient, correlation_id: str = "test-correlation")
 TOOL_CASES: list[tuple[ToolCallable, BaseModel]] = [
     (get_financial_overview, FinancialOverviewRequest(scope={"user_id": USER_A})),
     (get_accounts, AccountsRequest(scope={"user_id": USER_A})),
+    (get_credit_cards, CreditCardsRequest(scope={"user_id": USER_A})),
     (get_transactions, TransactionsRequest(scope={"user_id": USER_A})),
     (analyze_spending, SpendingAnalysisRequest(scope={"user_id": USER_A})),
     (get_cash_flow, CashFlowRequest(scope={"user_id": USER_A})),
@@ -132,6 +191,20 @@ TOOL_CASES: list[tuple[ToolCallable, BaseModel]] = [
 
 def test_financial_request_model_registry_matches_the_registration_tuple() -> None:
     assert set(FINANCIAL_REQUEST_MODELS) == {tool.__name__ for tool in FINANCIAL_TOOLS}
+
+
+@pytest.mark.asyncio
+async def test_credit_card_tool_returns_only_a_masked_card_projection() -> None:
+    result = await get_credit_cards_data(
+        CreditCardDatabase(), CreditCardsRequest(scope={"user_id": USER_A})
+    )
+
+    assert result["count"] == 1
+    card = result["cards"][0]
+    assert card["masked_last_four"] == "•••• 1234"
+    assert card["available_credit"] == 2500
+    assert card["credit_terms"]["minimum_payment"] == 400
+    assert "last_four" not in card
 
 
 def _case_id(value: object) -> str:

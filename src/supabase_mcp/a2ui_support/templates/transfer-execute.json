@@ -39,19 +39,25 @@
         },
         {
           "id": "source_account",
-          "component": "TextField",
+          "component": "ChoicePicker",
           "label": "Cuenta de origen",
           "value": {
             "path": "/form/source_account"
-          }
+          },
+          "options": [],
+          "variant": "mutuallyExclusive",
+          "displayStyle": "chips"
         },
         {
           "id": "recipient",
-          "component": "TextField",
-          "label": "Destinatario",
+          "component": "ChoicePicker",
+          "label": "Contacto",
           "value": {
             "path": "/form/recipient"
-          }
+          },
+          "options": [],
+          "variant": "mutuallyExclusive",
+          "displayStyle": "chips"
         },
         {
           "id": "amount",

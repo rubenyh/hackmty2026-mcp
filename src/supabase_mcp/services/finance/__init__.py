@@ -8,6 +8,7 @@ from supabase_mcp.services.finance._shared import resolve_period
 from supabase_mcp.services.finance.accounts import (
     get_accounts_data,
     get_bank_statements_data,
+    get_credit_cards_data,
 )
 from supabase_mcp.services.finance.budgets import get_budget_progress_data
 from supabase_mcp.services.finance.cash_flow import get_cash_flow_data
@@ -41,6 +42,7 @@ __all__ = [
     "get_beneficiaries_data",
     "get_budget_progress_data",
     "get_cash_flow_data",
+    "get_credit_cards_data",
     "get_debt_overview_data",
     "get_financial_alerts_data",
     "get_financial_overview_data",

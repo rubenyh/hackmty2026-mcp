@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+from copy import deepcopy
 from datetime import datetime, timedelta
 from typing import Annotated, Any, Literal
 from zoneinfo import ZoneInfo
@@ -14,7 +15,7 @@ from pydantic import BaseModel, Field
 from supabase_mcp.a2ui_actions.registry import ACTIONS, CONTEXTS
 from supabase_mcp.a2ui_support.actions import A2UIActionCall, ActionDispatchError, RegisteredAction
 from supabase_mcp.a2ui_support.response import A2UIResponseFactory
-from supabase_mcp.a2ui_support.surfaces import ACTION_SURFACES
+from supabase_mcp.a2ui_support.surfaces import ACTION_SURFACES, SURFACE_REGISTRY
 from supabase_mcp.database import DatabaseClient
 from supabase_mcp.errors import InvalidSelectionError
 from supabase_mcp.models import SelectRequest, UserScope
@@ -67,9 +68,21 @@ def _account_label(row: dict[str, Any]) -> str:
     return f"{row['display_name']}{ending}"
 
 
+def _unique_choice_options(options: list[dict[str, str]]) -> list[dict[str, str]]:
+    """Keep a renderable stable value set; ambiguous names remain server-validated."""
+    seen: set[str] = set()
+    unique = []
+    for option in options:
+        if option["value"] in seen:
+            continue
+        seen.add(option["value"])
+        unique.append(option)
+    return unique
+
+
 async def _prepare_transfer(
     database: DatabaseClient, scope: UserScope, form: dict[str, Any]
-) -> tuple[str, dict[str, Any]]:
+) -> tuple[str, dict[str, Any], dict[str, list[dict[str, str]]]]:
     accounts = await _accounts_with_details(database, scope)
     sources = [
         row
@@ -94,35 +107,54 @@ async def _prepare_transfer(
         if row["currency"] == "MXN" and row["account_type"] in {"checking", "savings"}
     ]
     if sources:
-        form["source_account"] = str(sources[0]["display_name"])
+        form["source_account"] = [str(sources[0]["display_name"])]
         form["amount"] = min(500, float(sources[0]["available_balance"]))
     if beneficiaries:
-        form["recipient"] = str(beneficiaries[0]["display_name"])
+        form["recipient"] = [str(beneficiaries[0]["display_name"])]
     elif sources:
         target = next(
             (row for row in own_destinations if row["id"] != sources[0]["id"]),
             None,
         )
         if target:
-            form["recipient"] = str(target["display_name"])
-    source_text = ", ".join(
-        f"{_account_label(row)} ({float(row['available_balance']):,.2f} MXN)" for row in sources
-    )
-    recipient_text = ", ".join(
-        f"{row['display_name']} · {row['bank_name']} · •••• {row['last_four']}"
+            form["recipient"] = [str(target["display_name"])]
+    source_options = _unique_choice_options([
+        {
+            "label": (
+                f"{_account_label(row)} · ${float(row['available_balance']):,.2f} MXN"
+            ),
+            "value": str(row["display_name"]),
+        }
+        for row in sources
+    ])
+    recipient_options = _unique_choice_options([
+        {
+            "label": f"{row['display_name']} · {row['bank_name']} · •••• {row['last_four']}",
+            "value": str(row["display_name"]),
+        }
         for row in beneficiaries
+    ])
+    beneficiary_names = {option["value"] for option in recipient_options}
+    recipient_options.extend(
+        {
+            "label": f"Cuenta propia · {_account_label(row)}",
+            "value": str(row["display_name"]),
+        }
+        for row in own_destinations
+        if str(row["display_name"]) not in beneficiary_names
     )
-    own_account_text = ", ".join(_account_label(row) for row in own_destinations)
+    recipient_options = _unique_choice_options(recipient_options)
     if not sources or (not beneficiaries and len(own_destinations) < 2):
         return (
             "Necesitas una cuenta con saldo y otro destino disponible para transferir.",
             {},
+            {"source_account": source_options, "recipient": recipient_options},
         )
     return (
-        f"Elige por nombre exacto. Cuentas de origen: {source_text}. "
-        f"Cuentas propias: {own_account_text}. Destinatarios: {recipient_text or 'ninguno'}. "
-        "El botón confirma el movimiento inmediato en MXN y no cobra comisión.",
+        "Selecciona una cuenta, un contacto y la cantidad. El botón confirma "
+        "el movimiento inmediato en MXN y no cobra comisión.",
         {},
+        {"source_account": source_options, "recipient": recipient_options},
     )
 
 
@@ -293,8 +325,9 @@ async def prepare_form(
         "Importes en MXN; esta acción no mueve dinero."
     )
     extra_data: dict[str, Any] = {}
+    choice_options: dict[str, list[dict[str, str]]] = {}
     if name == "transfer.execute":
-        help_text, extra_data = await _prepare_transfer(database, scope, form)
+        help_text, extra_data, choice_options = await _prepare_transfer(database, scope, form)
     elif name == "credit_card.pay":
         help_text, extra_data = await _prepare_credit_card_payment(database, scope, form)
     if name.endswith(".load"):
@@ -318,9 +351,53 @@ async def prepare_form(
             help_text += " Se muestran los primeros 50 registros."
     if values:
         form.update({key: values[key] for key in spec["contextFields"] if key in values})
+    for key in choice_options:
+        current = form.get(key)
+        if isinstance(current, str):
+            form[key] = [current]
+        allowed_values = {option["value"] for option in choice_options[key]}
+        selected = form.get(key)
+        if (
+            not isinstance(selected, list)
+            or len(selected) != 1
+            or selected[0] not in allowed_values
+        ):
+            form[key] = [choice_options[key][0]["value"]] if choice_options[key] else []
+    component_updates = []
+    if choice_options:
+        replacements = {}
+        fields_by_key = {field["key"]: field for field in spec["inputs"]}
+        for key, options in choice_options.items():
+            field = fields_by_key[key]
+            replacements[key] = {
+                "id": key,
+                "component": "ChoicePicker",
+                "label": field["label"],
+                "value": {"path": f"/form/{key}"},
+                "variant": "mutuallyExclusive",
+                "options": options,
+                "displayStyle": "chips",
+                "filterable": len(options) > 8,
+            }
+        template = SURFACE_REGISTRY.template(ACTION_SURFACES[name])
+        static_components = template[1]["updateComponents"]["components"]
+        components = [
+            replacements.get(component["id"], deepcopy(component))
+            for component in static_components
+        ]
+        component_updates.append(
+            {
+                "version": "v0.9.1",
+                "updateComponents": {
+                    "surfaceId": spec["surfaceId"],
+                    "components": components,
+                },
+            }
+        )
     return A2UIResponseFactory(ACTION_SURFACES[name]).build(
         fallback_text=spec["title"],
         data_model={"form": form, "help": help_text, **extra_data},
+        component_updates=component_updates,
     )
 
 
@@ -350,7 +427,7 @@ async def a2ui_form(
         if initial_amount is not None:
             values["amount"] = initial_amount
         if initial_recipient is not None:
-            values["recipient"] = initial_recipient.strip()
+            values["recipient"] = [initial_recipient.strip()]
         return await prepare_form(name, _database(ctx), trustedScope, values)
     except Exception:
         return action_outcome(
@@ -364,6 +441,9 @@ async def handle_form_action(
     if scope is None:
         raise ActionDispatchError("missing_trusted_scope", "Inicia sesión para guardar cambios.")
     values = context.model_dump(mode="json")
+    if call.name == "transfer.execute":
+        values["source_account"] = values["source_account"][0]
+        values["recipient"] = values["recipient"][0]
     try:
         if call.name.endswith(".load"):
             table = "budgets" if call.name.startswith("budget.") else "savings_goals"

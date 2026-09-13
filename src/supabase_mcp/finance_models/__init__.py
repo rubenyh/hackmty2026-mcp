@@ -9,7 +9,11 @@ from supabase_mcp.finance_models._shared import (
     ResolvedDateRange,
     TimePeriod,
 )
-from supabase_mcp.finance_models.accounts import AccountsRequest, BankStatementsRequest
+from supabase_mcp.finance_models.accounts import (
+    AccountsRequest,
+    BankStatementsRequest,
+    CreditCardsRequest,
+)
 from supabase_mcp.finance_models.budgets import BudgetProgressRequest
 from supabase_mcp.finance_models.cash_flow import CashFlowRequest
 from supabase_mcp.finance_models.debts import CompareDebtScenariosRequest, DebtOverviewRequest
@@ -43,6 +47,7 @@ __all__ = [
     "BudgetProgressRequest",
     "CashFlowRequest",
     "CompareDebtScenariosRequest",
+    "CreditCardsRequest",
     "CurrencyTotal",
     "DataQuality",
     "DebtOverviewRequest",

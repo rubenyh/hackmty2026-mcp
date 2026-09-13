@@ -9,6 +9,7 @@ from supabase_mcp.finance_models import (
     BudgetProgressRequest,
     CashFlowRequest,
     CompareDebtScenariosRequest,
+    CreditCardsRequest,
     DebtOverviewRequest,
     DetectTransactionAnomaliesRequest,
     FinancialAlertsRequest,
@@ -23,7 +24,11 @@ from supabase_mcp.finance_models import (
     TransactionsRequest,
     UpcomingPaymentsRequest,
 )
-from supabase_mcp.tools.finance.accounts import get_accounts, get_bank_statements
+from supabase_mcp.tools.finance.accounts import (
+    get_accounts,
+    get_bank_statements,
+    get_credit_cards,
+)
 from supabase_mcp.tools.finance.budgets import get_budget_progress
 from supabase_mcp.tools.finance.cash_flow import get_cash_flow
 from supabase_mcp.tools.finance.debts import compare_debt_scenarios, get_debt_overview
@@ -52,6 +57,7 @@ from supabase_mcp.tools.finance.savings import get_savings_progress
 FINANCIAL_TOOLS = (
     get_financial_overview,
     get_accounts,
+    get_credit_cards,
     get_transactions,
     analyze_spending,
     get_cash_flow,
@@ -74,6 +80,7 @@ FINANCIAL_TOOLS = (
 FINANCIAL_REQUEST_MODELS: dict[str, type[BaseModel]] = {
     "get_financial_overview": FinancialOverviewRequest,
     "get_accounts": AccountsRequest,
+    "get_credit_cards": CreditCardsRequest,
     "get_transactions": TransactionsRequest,
     "analyze_spending": SpendingAnalysisRequest,
     "get_cash_flow": CashFlowRequest,
@@ -106,6 +113,7 @@ __all__ = [
     "get_beneficiaries",
     "get_budget_progress",
     "get_cash_flow",
+    "get_credit_cards",
     "get_debt_overview",
     "get_financial_alerts",
     "get_financial_overview",

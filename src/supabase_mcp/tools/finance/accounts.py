@@ -3,10 +3,15 @@
 from fastmcp import Context
 from fastmcp.tools import ToolResult
 
-from supabase_mcp.finance_models.accounts import AccountsRequest, BankStatementsRequest
+from supabase_mcp.finance_models.accounts import (
+    AccountsRequest,
+    BankStatementsRequest,
+    CreditCardsRequest,
+)
 from supabase_mcp.services.finance.accounts import (
     get_accounts_data,
     get_bank_statements_data,
+    get_credit_cards_data,
 )
 from supabase_mcp.tools.finance._shared import _run
 
@@ -23,6 +28,18 @@ async def get_accounts(request: AccountsRequest, ctx: Context) -> ToolResult:
     return await _run("get_accounts", request, ctx, get_accounts_data)
 
 
+async def get_credit_cards(request: CreditCardsRequest, ctx: Context) -> ToolResult:
+    """Tarjetas de crédito del usuario / User credit cards.
+
+    Active, blocked or inactive credit cards with masked last four digits,
+    available credit and current payment terms. Excludes debit cards, full card
+    numbers and unrelated account details. Claves: tarjeta de crédito, mi
+    tarjeta, crédito disponible, pago mínimo, fecha límite, credit card,
+    available credit, minimum payment, due date.
+    """
+    return await _run("get_credit_cards", request, ctx, get_credit_cards_data)
+
+
 async def get_bank_statements(request: BankStatementsRequest, ctx: Context) -> ToolResult:
     """Estados de cuenta / Bank statement documents.
 
@@ -35,4 +52,4 @@ async def get_bank_statements(request: BankStatementsRequest, ctx: Context) -> T
     return await _run("get_bank_statements", request, ctx, get_bank_statements_data)
 
 
-__all__ = ["get_accounts", "get_bank_statements"]
+__all__ = ["get_accounts", "get_bank_statements", "get_credit_cards"]

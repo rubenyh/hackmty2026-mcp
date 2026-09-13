@@ -5,7 +5,11 @@ from __future__ import annotations
 from typing import Any
 
 from supabase_mcp.database import DatabaseClient
-from supabase_mcp.finance_models.accounts import AccountsRequest, BankStatementsRequest
+from supabase_mcp.finance_models.accounts import (
+    AccountsRequest,
+    BankStatementsRequest,
+    CreditCardsRequest,
+)
 from supabase_mcp.models import FilterCondition, FilterOperator, OrderBy, OrderDirection
 from supabase_mcp.services.finance._shared import (
     _cursor_offset,
@@ -50,11 +54,18 @@ async def get_accounts_data(database: DatabaseClient, request: AccountsRequest) 
             if request.status
             else [],
         )
-        cards = [
-            {**row, "masked_last_four": f"•••• {row.pop('last_four')}"}
-            for row in (dict(item) for item in card_rows)
-            if str(row.get("account_id")) in {str(account["id"]) for account in accounts}
-        ]
+        owned_account_ids = {str(account["id"]) for account in accounts}
+        for item in card_rows:
+            row = dict(item)
+            if str(row.get("account_id")) not in owned_account_ids:
+                continue
+            last_four = row.pop("last_four", None)
+            cards.append(
+                {
+                    **row,
+                    "masked_last_four": f"•••• {last_four}" if last_four else None,
+                }
+            )
     terms_by_account: dict[str, dict[str, Any]] = {}
     if request.include_credit_terms:
         term_rows, _ = await _select(
@@ -96,6 +107,43 @@ async def get_accounts_data(database: DatabaseClient, request: AccountsRequest) 
             }
         )
     return {"ok": True, "accounts": result, "count": len(result)}
+
+
+async def get_credit_cards_data(
+    database: DatabaseClient, request: CreditCardsRequest
+) -> dict[str, Any]:
+    """Return a bounded, masked projection for credit-card presentation."""
+
+    account_result = await get_accounts_data(
+        database,
+        AccountsRequest(
+            scope=request.scope,
+            account_ids=request.account_ids,
+            account_type="credit",
+            include_cards=True,
+            include_credit_terms=True,
+            status=request.status,
+        ),
+    )
+    cards: list[dict[str, Any]] = []
+    for account in account_result["accounts"]:
+        terms = account.get("credit_terms")
+        if not isinstance(terms, dict):
+            continue
+        for card in account.get("cards", []):
+            if card.get("card_type") != "credit":
+                continue
+            cards.append(
+                {
+                    **card,
+                    "account_id": str(account["id"]),
+                    "currency": account.get("currency"),
+                    "available_credit": account.get("available_balance"),
+                    "credit_terms": terms,
+                }
+            )
+    cards.sort(key=lambda card: (card.get("status") != "active", str(card.get("id"))))
+    return {"ok": True, "cards": cards, "count": len(cards)}
 
 
 async def get_bank_statements_data(
@@ -160,4 +208,4 @@ async def get_bank_statements_data(
     }
 
 
-__all__ = ["get_accounts_data", "get_bank_statements_data"]
+__all__ = ["get_accounts_data", "get_bank_statements_data", "get_credit_cards_data"]

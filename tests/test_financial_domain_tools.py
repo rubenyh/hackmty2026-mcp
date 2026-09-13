@@ -1,4 +1,4 @@
-"""Offline contract tests for the nineteen financial domain tools."""
+"""Offline contract tests for the twenty financial domain tools."""
 
 from __future__ import annotations
 
@@ -42,6 +42,7 @@ USER_A = "11111111-1111-1111-1111-111111111111"
 FINANCIAL_NAMES = {
     "get_financial_overview",
     "get_accounts",
+    "get_credit_cards",
     "get_transactions",
     "analyze_spending",
     "get_cash_flow",
@@ -80,6 +81,7 @@ FINANCIAL_CONTRACT_HASHES = {
     "get_beneficiaries": "fea659d07a9c068f6d85dd35ae94787e59516313649b28799a87abc51dc67521",
     "get_budget_progress": "348f61f4d69e0aabcfb121e5e28267976fd4185a8deaf53eb20b018884d06a1f",
     "get_cash_flow": "71d506b99fc8373d29e27ea4e4e0a8e6a84ca5bfc484a8ea19d08281d7d45c30",
+    "get_credit_cards": "cdb1f28d456d735aef7e8a8442d440e195a56ce6d3deb850f612b3e3013bef59",
     "get_debt_overview": "7d56a6d907f71b91e6322f9ea37d4fdce00c80b372adad9d0f441c85379af3a9",
     "get_financial_alerts": "1753d53775caba85da553b6765aa2cd9adee12d9569860c67553d670bf68d72b",
     "get_financial_overview": "2799811cd8f34c513b4c46125fc77c97dc8779ec6d9bedd9fde6f9995bae0150",
@@ -93,9 +95,13 @@ FINANCIAL_CONTRACT_HASHES = {
 
 DOMAIN_SYMBOLS = {
     "accounts": {
-        "models": ("AccountsRequest", "BankStatementsRequest"),
-        "services": ("get_accounts_data", "get_bank_statements_data"),
-        "tools": ("get_accounts", "get_bank_statements"),
+        "models": ("AccountsRequest", "BankStatementsRequest", "CreditCardsRequest"),
+        "services": (
+            "get_accounts_data",
+            "get_bank_statements_data",
+            "get_credit_cards_data",
+        ),
+        "tools": ("get_accounts", "get_bank_statements", "get_credit_cards"),
     },
     "budgets": {
         "models": ("BudgetProgressRequest",),
@@ -163,7 +169,7 @@ DOMAIN_SYMBOLS = {
 
 
 @pytest.mark.asyncio
-async def test_all_nineteen_tools_are_registered_with_bilingual_discovery_text(
+async def test_all_twenty_tools_are_registered_with_bilingual_discovery_text(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv(

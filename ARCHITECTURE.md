@@ -189,7 +189,7 @@ The effective limit is the request limit or `MCP_DEFAULT_LIMIT` and cannot excee
 
 ## Progressive tool discovery
 
-Thirty tools are registered, nineteen of them financial, and that catalog is
+Thirty-one tools are registered, twenty of them financial, and that catalog is
 expected to keep growing. Sending every schema on every request wastes context,
 slows the turn, and degrades selection, so `supabase_mcp.discovery` installs
 FastMCP's native `BM25SearchTransform` as the last transform on the server.
@@ -275,7 +275,7 @@ Known request failures use stable public codes such as `object_not_allowed`, `co
 
 Visualization query failures raised by the database driver use the actionable, sanitized `database_error` result rather than falling through to a generic server failure. Protocol responses never include driver text, SQL statements, connection details, or stack traces.
 
-The nineteen financial tools share a stricter execution boundary. Every controlled
+The twenty financial tools share a stricter execution boundary. Every controlled
 failure is a `ToolResult` with `isError: true`; its fallback text is the same
 sanitized JSON object exposed in `structuredContent`. The stable codes are
 `VALIDATION_ERROR`, `INVALID_DATE_RANGE`, `INVALID_CURSOR`, `USER_SCOPE_ERROR`,
@@ -436,7 +436,7 @@ Update this file whenever source code, configuration, dependencies, public tool 
 
 ## A2UI forms and explicitly confirmed writes
 
-`a2ui_actions/inputs.json` describes the Expo input subset; `actions.json` owns the input types, counts, context fields and submit labels for budget and savings-goal create/update/load, transfer execution and credit-card payment. `tools/action_forms.py` prepares eight v0.9.1 surfaces using TextField, DateTimeInput (date only), Slider and Button. The payment form uses Finance v2 and binds a validated `BankingView` so Expo shows the masked `PaymentCard` and current credit terms before confirmation. The agent can prepare forms, but the model never receives the `a2ui_action` write tool. Only an explicit client submit routes there under the authenticated Supabase subject. A load action reads an owned record by exact name and fills its update form; duplicate names are rejected.
+`a2ui_actions/inputs.json` describes the Expo input subset; `actions.json` owns the input types, counts, context fields and submit labels for budget and savings-goal create/update/load, transfer execution and credit-card payment. `tools/action_forms.py` prepares eight v0.9.1 surfaces using TextField, DateTimeInput (date only), Slider, ChoicePicker and Button. Transfer choices are built at request time from the authenticated user's eligible accounts, beneficiaries and own accounts; the cached static resource remains user-neutral. The payment form uses Finance v2 and binds a validated `BankingView` so Expo shows the masked `PaymentCard` and current credit terms before confirmation. The agent can prepare forms, but the model never receives the `a2ui_action` write tool. Only an explicit client submit routes there under the authenticated Supabase subject. A load action reads an owned record by exact name and fills its update form; duplicate names are rejected.
 
 Writes are the product-authorized exception to the original read-only scope. `DatabaseClient.apply_financial_action` is the only new database boundary. It uses optional `MCP_ACTIONS_DATABASE_URL`, a separate `fluidbank_actions` role and fixed `apply_a2ui_action` SQL. The original read pool, exact allowlists, read-only transactions and TLS requirements remain. Write configuration rejects privileged roles and requires `MCP_ACTIONS_SECRET` (at least 32 characters), shared only by the agent and MCP. The agent signs the complete A2UI event plus its verified user ID with HMAC-SHA256, overwriting any supplied proof. MCP verifies this signature before dispatching writes. Horizon authentication remains in place for remote access; the action proof independently prevents forged trustedScope from authorizing writes. Never give either service secret to Expo or the LLM. Replayed exact events remain idempotent through database receipts.
 

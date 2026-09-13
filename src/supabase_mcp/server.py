@@ -128,6 +128,7 @@ mcp.add_middleware(FinancialValidationMiddleware(FINANCIAL_REQUEST_MODELS))
 FINANCIAL_TOOL_TAGS: dict[str, set[str]] = {
     "get_financial_overview": {"finance", "accounts", "budgets", "savings", "debts"},
     "get_accounts": {"finance", "accounts", "credit"},
+    "get_credit_cards": {"finance", "accounts", "credit", "cards"},
     "get_transactions": {"finance", "transactions", "expenses"},
     "analyze_spending": {"finance", "expenses", "transactions"},
     "get_cash_flow": {"finance", "cash-flow"},
