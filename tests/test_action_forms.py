@@ -1,6 +1,9 @@
 """Offline coverage for form contracts, ownership, validation and write results."""
 
+import json
+
 import pytest
+from mcp.types import EmbeddedResource
 from pydantic import SecretStr, ValidationError
 
 from supabase_mcp.a2ui_actions.registry import ACTIONS, CONTEXTS
@@ -24,10 +27,78 @@ VALUES = {
 class FakeDatabase:
     def __init__(self):
         self.calls = []
+        self.rows = {
+            "accounts": [
+                {
+                    "id": "10000000-0000-4000-8000-000000000001",
+                    "account_type": "checking",
+                    "currency": "MXN",
+                    "available_balance": 10000,
+                },
+                {
+                    "id": "10000000-0000-4000-8000-000000000002",
+                    "account_type": "credit",
+                    "currency": "MXN",
+                    "available_balance": 1500,
+                },
+            ],
+            "account_details": [
+                {
+                    "account_id": "10000000-0000-4000-8000-000000000001",
+                    "display_name": "Cuenta principal",
+                    "last_four": "1111",
+                },
+                {
+                    "account_id": "10000000-0000-4000-8000-000000000002",
+                    "display_name": "Tarjeta oro",
+                    "last_four": "2222",
+                },
+            ],
+            "beneficiaries": [
+                {
+                    "display_name": "Ana",
+                    "bank_name": "Banco receptor",
+                    "last_four": "4321",
+                    "status": "verified",
+                    "linked_account_id": "10000000-0000-4000-8000-000000000003",
+                }
+            ],
+            "cards": [
+                {
+                    "id": "30000000-0000-4000-8000-000000000001",
+                    "account_id": "10000000-0000-4000-8000-000000000002",
+                    "display_name": "Tarjeta oro",
+                    "card_type": "credit",
+                    "network": "visa",
+                    "last_four": "2222",
+                    "status": "active",
+                    "expires_month": 12,
+                    "expires_year": 2030,
+                }
+            ],
+            "credit_card_terms": [
+                {
+                    "account_id": "10000000-0000-4000-8000-000000000002",
+                    "currency": "MXN",
+                    "credit_limit": 10000,
+                    "current_debt": 8500,
+                    "statement_balance": 6200,
+                    "minimum_payment": 420,
+                    "interest_free_payment": 6200,
+                    "annual_interest_rate": 42,
+                    "cat_percentage": 53.2,
+                    "cutoff_date": "2026-09-01",
+                    "due_date": "2026-09-25",
+                }
+            ],
+        }
 
     async def apply_financial_action(self, *args):
         self.calls.append(args)
-        return {"status": "success", "id": UID}
+        return {"status": "success", "id": UID, "amount": args[1].get("amount", 0)}
+
+    async def select_scoped_rows(self, request):
+        return self.rows.get(request.table, []), request.limit, False
 
 
 async def dispatch(db, **patch):
@@ -94,11 +165,69 @@ async def test_validation_identifies_the_field_without_echoing_its_value():
 
 async def test_forms_use_registered_input_counts_and_only_prepare_data():
     db = FakeDatabase()
-    for name in ("budget.create", "savings_goal.create"):
+    for name in (
+        "budget.create",
+        "savings_goal.create",
+        "transfer.execute",
+        "credit_card.pay",
+    ):
         result = await prepare_form(name, db, UserScope(user_id=UID))
         assert not result.is_error
         assert ACTIONS[name]["inputCount"] == len(ACTIONS[name]["inputs"])
     assert db.calls == []
+
+
+async def test_transfer_and_card_payment_dispatch_as_bounded_writes():
+    db = FakeDatabase()
+    transfer = await dispatch(
+        db,
+        name="transfer.execute",
+        surface_id="transfer-execute",
+        context={
+            "source_account": "Cuenta principal",
+            "recipient": "Ana",
+            "amount": 500,
+            "concept": "Comida",
+        },
+    )
+    payment = await dispatch(
+        db,
+        name="credit_card.pay",
+        surface_id="credit-card-pay",
+        context={"source_account": "Cuenta principal", "card": "Tarjeta oro", "amount": 2000},
+    )
+    assert transfer.structured_content["actionResult"]["message"].startswith(
+        "Transferencia completada"
+    )
+    assert payment.structured_content["actionResult"]["message"].startswith("Pago aplicado")
+    assert [call[0] for call in db.calls] == ["transfer.execute", "credit_card.pay"]
+
+
+async def test_transfer_form_exposes_current_contacts_as_single_choice_options():
+    result = await prepare_form("transfer.execute", FakeDatabase(), UserScope(user_id=UID))
+
+    assert result.structured_content["form"]["source_account"] == ["Cuenta principal"]
+    assert result.structured_content["form"]["recipient"] == ["Ana"]
+    embedded = next(item for item in result.content if isinstance(item, EmbeddedResource))
+    messages = json.loads(embedded.resource.text)
+    components = messages[0]["updateComponents"]["components"]
+    recipient = next(component for component in components if component["id"] == "recipient")
+    assert recipient["component"] == "ChoicePicker"
+    assert recipient["options"][0] == {
+        "label": "Ana · Banco receptor · •••• 4321 · cuenta FluidBank",
+        "value": "Ana",
+    }
+
+
+async def test_card_payment_form_contains_masked_card_preview_and_prefilled_choices():
+    result = await prepare_form("credit_card.pay", FakeDatabase(), UserScope(user_id=UID))
+    assert result.structured_content["form"] == {
+        "source_account": "Cuenta principal",
+        "card": "Tarjeta oro",
+        "amount": 6200,
+    }
+    assert result.structured_content["preview"]["card"]["lastFour"] == "2222"
+    assert "Cuenta principal" in result.structured_content["help"]
 
 
 def test_write_connection_rejects_privileged_role_and_missing_service_secret():

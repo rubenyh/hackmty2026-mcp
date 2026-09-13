@@ -1,0 +1,113 @@
+[
+  {
+    "version": "v0.9.1",
+    "createSurface": {
+      "surfaceId": "transfer-execute",
+      "catalogId": "https://a2ui.org/specification/v0_9_1/catalogs/basic/catalog.json"
+    }
+  },
+  {
+    "version": "v0.9.1",
+    "updateComponents": {
+      "surfaceId": "transfer-execute",
+      "components": [
+        {
+          "id": "root",
+          "component": "Column",
+          "children": [
+            "title",
+            "help",
+            "source_account",
+            "recipient",
+            "amount",
+            "concept",
+            "submit"
+          ]
+        },
+        {
+          "id": "title",
+          "component": "Text",
+          "text": "Transferir dinero",
+          "variant": "h2"
+        },
+        {
+          "id": "help",
+          "component": "Text",
+          "text": {
+            "path": "/help"
+          }
+        },
+        {
+          "id": "source_account",
+          "component": "ChoicePicker",
+          "label": "Cuenta de origen",
+          "value": {
+            "path": "/form/source_account"
+          },
+          "options": [],
+          "variant": "mutuallyExclusive",
+          "displayStyle": "chips"
+        },
+        {
+          "id": "recipient",
+          "component": "ChoicePicker",
+          "label": "Contacto",
+          "value": {
+            "path": "/form/recipient"
+          },
+          "options": [],
+          "variant": "mutuallyExclusive",
+          "displayStyle": "chips"
+        },
+        {
+          "id": "amount",
+          "component": "Slider",
+          "label": "Cantidad en MXN",
+          "value": {
+            "path": "/form/amount"
+          },
+          "min": 1,
+          "max": 100000
+        },
+        {
+          "id": "concept",
+          "component": "TextField",
+          "label": "Concepto",
+          "value": {
+            "path": "/form/concept"
+          }
+        },
+        {
+          "id": "submit",
+          "component": "Button",
+          "child": "submit-label",
+          "variant": "primary",
+          "action": {
+            "event": {
+              "name": "transfer.execute",
+              "context": {
+                "source_account": {
+                  "path": "/form/source_account"
+                },
+                "recipient": {
+                  "path": "/form/recipient"
+                },
+                "amount": {
+                  "path": "/form/amount"
+                },
+                "concept": {
+                  "path": "/form/concept"
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "submit-label",
+          "component": "Text",
+          "text": "Confirmar transferencia"
+        }
+      ]
+    }
+  }
+]

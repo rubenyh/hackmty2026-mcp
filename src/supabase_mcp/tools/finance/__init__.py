@@ -9,17 +9,26 @@ from supabase_mcp.finance_models import (
     BudgetProgressRequest,
     CashFlowRequest,
     CompareDebtScenariosRequest,
+    CreditCardsRequest,
     DebtOverviewRequest,
+    DetectTransactionAnomaliesRequest,
     FinancialAlertsRequest,
     FinancialOverviewRequest,
+    ForecastCashBalanceRequest,
+    ForecastRecurringChargesRequest,
     PaymentActivityRequest,
+    PredictSavingsGoalRequest,
     SavingsProgressRequest,
     SpendingAnalysisRequest,
     TransactionDisputesRequest,
     TransactionsRequest,
     UpcomingPaymentsRequest,
 )
-from supabase_mcp.tools.finance.accounts import get_accounts, get_bank_statements
+from supabase_mcp.tools.finance.accounts import (
+    get_accounts,
+    get_bank_statements,
+    get_credit_cards,
+)
 from supabase_mcp.tools.finance.budgets import get_budget_progress
 from supabase_mcp.tools.finance.cash_flow import get_cash_flow
 from supabase_mcp.tools.finance.debts import compare_debt_scenarios, get_debt_overview
@@ -37,11 +46,18 @@ from supabase_mcp.tools.finance.payments import (
     get_payment_activity,
     get_upcoming_payments,
 )
+from supabase_mcp.tools.finance.predictions import (
+    detect_transaction_anomalies,
+    forecast_cash_balance,
+    forecast_recurring_charges,
+    predict_savings_goal,
+)
 from supabase_mcp.tools.finance.savings import get_savings_progress
 
 FINANCIAL_TOOLS = (
     get_financial_overview,
     get_accounts,
+    get_credit_cards,
     get_transactions,
     analyze_spending,
     get_cash_flow,
@@ -55,11 +71,16 @@ FINANCIAL_TOOLS = (
     get_beneficiaries,
     get_transaction_disputes,
     compare_debt_scenarios,
+    forecast_cash_balance,
+    predict_savings_goal,
+    forecast_recurring_charges,
+    detect_transaction_anomalies,
 )
 
 FINANCIAL_REQUEST_MODELS: dict[str, type[BaseModel]] = {
     "get_financial_overview": FinancialOverviewRequest,
     "get_accounts": AccountsRequest,
+    "get_credit_cards": CreditCardsRequest,
     "get_transactions": TransactionsRequest,
     "analyze_spending": SpendingAnalysisRequest,
     "get_cash_flow": CashFlowRequest,
@@ -73,6 +94,10 @@ FINANCIAL_REQUEST_MODELS: dict[str, type[BaseModel]] = {
     "get_beneficiaries": BeneficiariesRequest,
     "get_transaction_disputes": TransactionDisputesRequest,
     "compare_debt_scenarios": CompareDebtScenariosRequest,
+    "forecast_cash_balance": ForecastCashBalanceRequest,
+    "predict_savings_goal": PredictSavingsGoalRequest,
+    "forecast_recurring_charges": ForecastRecurringChargesRequest,
+    "detect_transaction_anomalies": DetectTransactionAnomaliesRequest,
 }
 
 __all__ = [
@@ -80,11 +105,15 @@ __all__ = [
     "FINANCIAL_TOOLS",
     "analyze_spending",
     "compare_debt_scenarios",
+    "detect_transaction_anomalies",
+    "forecast_cash_balance",
+    "forecast_recurring_charges",
     "get_accounts",
     "get_bank_statements",
     "get_beneficiaries",
     "get_budget_progress",
     "get_cash_flow",
+    "get_credit_cards",
     "get_debt_overview",
     "get_financial_alerts",
     "get_financial_overview",
@@ -93,4 +122,5 @@ __all__ = [
     "get_transaction_disputes",
     "get_transactions",
     "get_upcoming_payments",
+    "predict_savings_goal",
 ]

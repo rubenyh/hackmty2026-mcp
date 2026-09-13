@@ -1,4 +1,4 @@
-"""Centralized, read-only SQLAlchemy access and query validation."""
+"""Validated read access plus the fixed, separately configured action boundary."""
 
 from __future__ import annotations
 
@@ -24,6 +24,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.engine import Connection
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, create_async_engine
 
 from supabase_mcp.config import Settings
@@ -40,6 +41,50 @@ from supabase_mcp.models import (
 from supabase_mcp.serialization import serialize_row
 
 logger = logging.getLogger(__name__)
+
+_ACTION_DATABASE_ERRORS = {
+    "source_account_not_available": (
+        "source_account_not_available",
+        "No se encontró una única cuenta de origen disponible con ese nombre o terminación.",
+    ),
+    "recipient_not_available": (
+        "recipient_not_available",
+        "No se encontró un único destinatario disponible con ese nombre o terminación.",
+    ),
+    "external_recipient_not_supported": (
+        "external_recipient_not_supported",
+        "Ese contacto no está vinculado a una cuenta FluidBank y no puede recibir "
+        "una transferencia local.",
+    ),
+    "recipient_matches_source": (
+        "recipient_matches_source",
+        "La cuenta de destino debe ser distinta de la cuenta de origen.",
+    ),
+    "recipient_account_not_available": (
+        "recipient_account_not_available",
+        "La cuenta vinculada al contacto ya no está disponible para recibir la transferencia.",
+    ),
+    "credit_card_not_available": (
+        "credit_card_not_available",
+        "No se encontró una única tarjeta de crédito activa con ese nombre o terminación.",
+    ),
+    "insufficient_funds": (
+        "insufficient_funds",
+        "La cuenta seleccionada no tiene saldo suficiente para completar la operación.",
+    ),
+    "payment_exceeds_debt": (
+        "payment_exceeds_debt",
+        "El pago no puede superar la deuda actual de la tarjeta.",
+    ),
+    "record_not_available": (
+        "record_not_available",
+        "El registro ya no está disponible. Actualiza la consulta e inténtalo de nuevo.",
+    ),
+    "idempotency_conflict": (
+        "idempotency_conflict",
+        "La confirmación ya fue usada con otros datos. Vuelve a abrir el formulario.",
+    ),
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -188,12 +233,39 @@ class DatabaseClient:
             "budget.update",
             "savings_goal.create",
             "savings_goal.update",
+            "transfer.execute",
+            "credit_card.pay",
         }:
             raise InvalidSelectionError("unknown_action", "La acción no está permitida.")
-        table = "budgets" if name.startswith("budget.") else "savings_goals"
-        if ("public", table) not in self.settings.allowed_table_pairs:
+        required_tables = {
+            "budget.create": {"budgets"},
+            "budget.update": {"budgets"},
+            "savings_goal.create": {"savings_goals"},
+            "savings_goal.update": {"savings_goals"},
+            "transfer.execute": {
+                "accounts",
+                "account_details",
+                "beneficiaries",
+                "payment_orders",
+                "transactions",
+            },
+            "credit_card.pay": {
+                "accounts",
+                "account_details",
+                "cards",
+                "credit_card_terms",
+                "payment_orders",
+                "transactions",
+            },
+        }[name]
+        missing_tables = {
+            table
+            for table in required_tables
+            if ("public", table) not in self.settings.allowed_table_pairs
+        }
+        if missing_tables:
             raise InvalidSelectionError(
-                "table_not_allowed", "La tabla de esta acción no está habilitada."
+                "table_not_allowed", "Falta habilitar información necesaria para esta acción."
             )
         configured = self.settings.actions_database_url
         if configured is None:
@@ -208,32 +280,40 @@ class DatabaseClient:
             self._actions_engine = create_async_engine(
                 url, pool_size=2, max_overflow=0, pool_pre_ping=True
             )
-        async with self._actions_engine.begin() as connection:
-            role = (await connection.execute(text("select current_user"))).scalar_one()
-            if role != "fluidbank_actions":
-                raise InvalidSelectionError(
-                    "invalid_write_role", "La conexión de escritura no usa el rol permitido."
+        try:
+            async with self._actions_engine.begin() as connection:
+                role = (await connection.execute(text("select current_user"))).scalar_one()
+                if role != "fluidbank_actions":
+                    raise InvalidSelectionError(
+                        "invalid_write_role", "La conexión de escritura no usa el rol permitido."
+                    )
+                await connection.execute(
+                    text("select set_config('statement_timeout', :timeout, true)"),
+                    {"timeout": str(self.settings.statement_timeout_ms)},
                 )
-            await connection.execute(
-                text("select set_config('statement_timeout', :timeout, true)"),
-                {"timeout": str(self.settings.statement_timeout_ms)},
-            )
-            await connection.execute(
-                text("select set_config('request.jwt.claim.sub', :uid, true)"),
-                {"uid": str(scope.user_id)},
-            )
-            result = await connection.execute(
-                text(
-                    "select public.apply_a2ui_action(:name, :key, :hash, cast(:context as jsonb))"
-                ),
-                {
-                    "name": name,
-                    "key": request_key,
-                    "hash": payload_hash,
-                    "context": json.dumps(context),
-                },
-            )
-            return dict(result.scalar_one())
+                await connection.execute(
+                    text("select set_config('request.jwt.claim.sub', :uid, true)"),
+                    {"uid": str(scope.user_id)},
+                )
+                result = await connection.execute(
+                    text(
+                        "select public.apply_a2ui_action("
+                        ":name, :key, :hash, cast(:context as jsonb))"
+                    ),
+                    {
+                        "name": name,
+                        "key": request_key,
+                        "hash": payload_hash,
+                        "context": json.dumps(context),
+                    },
+                )
+                return dict(result.scalar_one())
+        except DBAPIError as exc:
+            database_message = str(exc.orig).lower()
+            for marker, (code, safe_message) in _ACTION_DATABASE_ERRORS.items():
+                if marker in database_message:
+                    raise InvalidSelectionError(code, safe_message) from exc
+            raise
 
     async def start(self) -> None:
         """Create one engine and validate all configured allowlist entries."""
@@ -373,14 +453,6 @@ class DatabaseClient:
                 raise InvalidSelectionError(
                     "nonnumeric_column", f"Column '{column.name}' is not numeric."
                 )
-
-    async def health_check(self) -> None:
-        """Run a minimal read-only database round trip."""
-        engine = self._require_engine()
-        async with engine.connect() as connection:
-            async with connection.begin():
-                await self._configure_transaction(connection)
-                await connection.execute(text("SELECT 1"))
 
     def build_select(self, request: SelectRequest) -> tuple[Select[Any], int]:
         """Validate a request and build a parameterized SQLAlchemy SELECT."""
@@ -523,13 +595,16 @@ class DatabaseClient:
             return column.ilike(value)
         raise InvalidSelectionError("operator_not_allowed", "The filter operator is not allowed.")
 
-    async def select_rows(self, request: SelectRequest) -> tuple[list[dict[str, Any]], int, bool]:
+    async def select_scoped_rows(
+        self, request: SelectRequest
+    ) -> tuple[list[dict[str, Any]], int, bool]:
         """Execute a validated selection in a bounded read-only transaction."""
         statement, limit = self.build_select(request)
         engine = self._require_engine()
         async with engine.connect() as connection:
             async with connection.begin():
                 await self._configure_transaction(connection)
+                await self._configure_user_scope(connection, request.scope)
                 await self._validate_user_scope(connection, request.scope)
                 result = await connection.execute(statement)
                 mappings = result.mappings().all()
@@ -543,7 +618,7 @@ class DatabaseClient:
         """Execute an internal domain read after its referenced IDs were ownership-checked.
 
         This is deliberately not exposed as an MCP tool. Domain services may add
-        account filters that the generic model-facing selector rejects, while the
+        account filters that the stricter scoped helper rejects, while the
         canonical user-scope predicate remains mandatory in the same SQL statement.
         """
         statement, limit = self._build_select(request, allow_scope_column_filters=True)
@@ -551,12 +626,21 @@ class DatabaseClient:
         async with engine.connect() as connection:
             async with connection.begin():
                 await self._configure_transaction(connection)
+                await self._configure_user_scope(connection, request.scope)
                 await self._validate_user_scope(connection, request.scope)
                 result = await connection.execute(statement)
                 mappings = result.mappings().all()
         truncated = len(mappings) > limit
         rows = [serialize_row(dict(row)) for row in mappings[:limit]]
         return rows, limit, truncated
+
+    @staticmethod
+    async def _configure_user_scope(connection: AsyncConnection, scope: UserScope) -> None:
+        """Place the verified subject in the current transaction for RLS policies."""
+        await connection.execute(
+            text("select set_config('request.jwt.claim.sub', :uid, true)"),
+            {"uid": str(scope.user_id)},
+        )
 
     async def _validate_user_scope(self, connection: AsyncConnection, scope: UserScope) -> None:
         """Require the scoped id to be a real application user.

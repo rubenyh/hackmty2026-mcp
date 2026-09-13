@@ -115,13 +115,6 @@ class PublicError(StrictModel):
     message: str
 
 
-class HealthResult(StrictModel):
-    ok: bool
-    status: str
-    database_available: bool
-    error: PublicError | None = None
-
-
 class AllowedObject(StrictModel):
     schema_name: str = Field(alias="schema")
     table: str
@@ -150,13 +143,15 @@ class DescribeTableResult(StrictModel):
     error: PublicError | None = None
 
 
-class SelectResult(StrictModel):
+class UserContextResult(StrictModel):
+    """Fixed application context returned to the trusted orchestrator."""
+
     ok: bool
-    rows: list[dict[str, Any]] = Field(default_factory=list)
-    row_count: int = 0
-    limit: int
-    offset: int
-    truncated: bool = False
+    user_found: bool = False
+    preferences: dict[str, Any] | None = None
+    accounts: list[dict[str, Any]] = Field(default_factory=list)
+    subscriptions: list[dict[str, Any]] = Field(default_factory=list)
+    cards: list[dict[str, Any]] = Field(default_factory=list)
     error: PublicError | None = None
 
 

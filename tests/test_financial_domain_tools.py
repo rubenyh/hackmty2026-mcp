@@ -1,4 +1,4 @@
-"""Offline contract tests for the fifteen financial domain tools."""
+"""Offline contract tests for the twenty financial domain tools."""
 
 from __future__ import annotations
 
@@ -42,6 +42,7 @@ USER_A = "11111111-1111-1111-1111-111111111111"
 FINANCIAL_NAMES = {
     "get_financial_overview",
     "get_accounts",
+    "get_credit_cards",
     "get_transactions",
     "analyze_spending",
     "get_cash_flow",
@@ -55,20 +56,34 @@ FINANCIAL_NAMES = {
     "get_beneficiaries",
     "get_transaction_disputes",
     "compare_debt_scenarios",
+    "detect_transaction_anomalies",
+    "forecast_cash_balance",
+    "forecast_recurring_charges",
+    "predict_savings_goal",
 }
-# Baseline regenerated for the English metadata pass: every financial
-# description, display title and parameter description was rewritten in English
-# and the `Claves:` keyword lists were removed. Names, request shapes and
-# structured results are unchanged — only the model-facing text moved, which is
-# exactly what this guard is meant to make visible rather than silent.
-FINANCIAL_CONTRACT_HASHES = {
+# Baseline regenerated for the English metadata pass over the merged catalog:
+# every financial description, display title and parameter description is
+# English, the `Claves:` keyword lists are gone, and the five new tools
+# (`get_credit_cards` plus the four model-backed predictions) joined the set.
+# Names, request shapes and structured results are unchanged — only the
+# model-facing text moved, which is exactly what this guard makes visible
+# rather than silent.
+FINANCIAL_CONTRACT_HASHES: dict[str, str] = {
     "analyze_spending": "3b364a1a15f09a5ebfb7fef419d318a5b19a9694510b7c41a62830408e0bc541",
     "compare_debt_scenarios": "5460ee9bcb1ddbe79ea25d55f025be4459f49cadda38ff981a1bd787aa62b23a",
+    "detect_transaction_anomalies": (
+        "7891bb7c392af1c1c6ddbd46fb388597d143a672117d55cc9cea498e7c6d790a"
+    ),
+    "forecast_cash_balance": "c3eef211865f8b41e4c362af40f072c360d46927ac02098aefa1591804b81627",
+    "forecast_recurring_charges": (
+        "21565cb3ab3f74cf1315a978360c379690a234b1ee11eec5b915890f6a9d9db6"
+    ),
     "get_accounts": "f2d1e05dffd55cf5c56c370357739ed647ebf383cbb4b6947198e864482ae2c4",
     "get_bank_statements": "9e08492e2abf6d47ada0bb8dc287663cafe113b8467533b60f74eff53ca99a2d",
     "get_beneficiaries": "1fcb897bfef2b6b4bf579443340d3e19b9a7bc6aee96c8c05e7670e222681cf0",
     "get_budget_progress": "d6478cd05d77441d77711e82c2398e874a3c460c9e4bda7d000478571d00ee33",
     "get_cash_flow": "c49ace07aebae74e699870b2a5b77ae17472ef5b1418da553266c795945d9d71",
+    "get_credit_cards": "5a6cf94f6b1cf0a309fb8d339adb4ee881c740b622fe3d3ed5793fc1939dbbd0",
     "get_debt_overview": "bcba3b53230cbde9eb6fc2c2561a80196025a0d43a9c568abd8a029c48908d8a",
     "get_financial_alerts": "60264d2f6f50a4e3cb48013c0abf829e590f900a1936c94eba65a2ec69e1e737",
     "get_financial_overview": "f2edcecfdef260c8613966191c451792cdba45677e8e0ac67e881d9323038e81",
@@ -77,6 +92,7 @@ FINANCIAL_CONTRACT_HASHES = {
     "get_transaction_disputes": "39663c44a20bf9ec2971e85957ab4fbbc970379ca7a28c1c2b2d36bd48a54516",
     "get_transactions": "de1b8f4ba980c7028f060e8cf0cf10b8c1b46d8cc17fbf748f73366cda4455f1",
     "get_upcoming_payments": "8ba1e34777afb48cf0d2a86ed485ca5f853d2a56229cf26513c28cf7429fdf5c",
+    "predict_savings_goal": "640c8c11cfa3c4ec4e774c9d482def71874e37160f0660a2e7df90a070e824bf",
 }
 
 #: The whole permitted domain/capability vocabulary. `predictive` is project
@@ -94,15 +110,24 @@ DOMAIN_TAGS = {
     "actions",
 }
 
-#: Non-domain plumbing: infrastructure readiness, generic schema primitives and
-#: A2UI presentation. These are not banking capabilities and keep their own tags.
-PLUMBING_TAGS = {"a2ui", "actions", "charts", "infrastructure", "schema"}
+#: Non-domain plumbing: the application turn-context loader, schema primitives
+#: and A2UI presentation. These are not banking capabilities and keep their own
+#: tags.
+PLUMBING_TAGS = {"a2ui", "actions", "application", "charts", "context", "schema"}
 
-#: `compare_debt_scenarios` is the only tool whose payload is forward-looking:
-#: projected months to payoff and projected total interest under stored
-#: assumptions. Every other financial tool reports recorded state, and
-#: `analyze_spending`'s prior-period comparison is history, not a forecast.
-PREDICTIVE_TOOLS = {"compare_debt_scenarios"}
+#: The exact set whose payload is forward-looking. `compare_debt_scenarios`
+#: projects months to payoff and total interest under stored assumptions; the
+#: other four call the models service and return a forecast, a completion
+#: probability or an anomaly score. Every other financial tool reports recorded
+#: state, and `analyze_spending`'s prior-period comparison is history, not a
+#: forecast.
+PREDICTIVE_TOOLS = {
+    "compare_debt_scenarios",
+    "forecast_cash_balance",
+    "predict_savings_goal",
+    "forecast_recurring_charges",
+    "detect_transaction_anomalies",
+}
 
 #: Spanish vocabulary that must not reappear in model-facing metadata. The
 #: catalog is read by the model in English; the Spanish user query is translated
@@ -146,9 +171,13 @@ def _assert_english(text: str, where: str) -> None:
 
 DOMAIN_SYMBOLS = {
     "accounts": {
-        "models": ("AccountsRequest", "BankStatementsRequest"),
-        "services": ("get_accounts_data", "get_bank_statements_data"),
-        "tools": ("get_accounts", "get_bank_statements"),
+        "models": ("AccountsRequest", "BankStatementsRequest", "CreditCardsRequest"),
+        "services": (
+            "get_accounts_data",
+            "get_bank_statements_data",
+            "get_credit_cards_data",
+        ),
+        "tools": ("get_accounts", "get_bank_statements", "get_credit_cards"),
     },
     "budgets": {
         "models": ("BudgetProgressRequest",),
@@ -192,6 +221,21 @@ DOMAIN_SYMBOLS = {
         ),
         "tools": ("get_beneficiaries", "get_payment_activity", "get_upcoming_payments"),
     },
+    "predictions": {
+        "models": (
+            "DetectTransactionAnomaliesRequest",
+            "ForecastCashBalanceRequest",
+            "ForecastRecurringChargesRequest",
+            "PredictSavingsGoalRequest",
+        ),
+        "services": ("PredictionService",),
+        "tools": (
+            "detect_transaction_anomalies",
+            "forecast_cash_balance",
+            "forecast_recurring_charges",
+            "predict_savings_goal",
+        ),
+    },
     "savings": {
         "models": ("SavingsProgressRequest",),
         "services": ("get_savings_progress_data",),
@@ -201,7 +245,7 @@ DOMAIN_SYMBOLS = {
 
 
 @pytest.mark.asyncio
-async def test_all_fifteen_tools_are_registered_with_english_discovery_text(
+async def test_all_twenty_tools_are_registered_with_english_discovery_text(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv(

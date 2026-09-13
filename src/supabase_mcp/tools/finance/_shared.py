@@ -27,7 +27,7 @@ from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 
 from supabase_mcp.errors import PublicErrorCode, SafeMCPError
 from supabase_mcp.serialization import to_json_safe
-from supabase_mcp.tools.health import _database
+from supabase_mcp.tools._context import database_from_context
 
 logger = logging.getLogger(__name__)
 RequestT = TypeVar("RequestT", bound=BaseModel)
@@ -106,6 +106,48 @@ _ERROR_DEFINITIONS: dict[PublicErrorCode, tuple[str, bool, str, str]] = {
         False,
         "data_mapping",
         "Verifica la forma y los tipos de las columnas consultadas.",
+    ),
+    PublicErrorCode.INFERENCE_NOT_CONFIGURED: (
+        "El servicio de predicciones no está configurado.",
+        False,
+        "inference_configuration",
+        "Configura INFERENCE_API_URL e INFERENCE_API_KEY en el servidor MCP.",
+    ),
+    PublicErrorCode.INFERENCE_TIMEOUT: (
+        "El servicio de predicciones excedió el tiempo permitido.",
+        True,
+        "inference_http",
+        "Intenta nuevamente; si persiste, revisa la disponibilidad del servicio.",
+    ),
+    PublicErrorCode.INFERENCE_UNAVAILABLE: (
+        "El modelo de predicción no está disponible.",
+        True,
+        "inference_http",
+        "Intenta nuevamente o verifica que el servicio y sus modelos estén listos.",
+    ),
+    PublicErrorCode.INFERENCE_AUTH_ERROR: (
+        "El servicio de predicciones rechazó la autenticación del servidor.",
+        False,
+        "inference_auth",
+        "Verifica la credencial server-to-server configurada en ambos servicios.",
+    ),
+    PublicErrorCode.INFERENCE_VERSION_MISMATCH: (
+        "La versión desplegada del modelo no es compatible.",
+        False,
+        "inference_contract",
+        "Despliega versiones compatibles del servicio y sus artefactos.",
+    ),
+    PublicErrorCode.INFERENCE_CONTRACT_ERROR: (
+        "El servicio de predicciones rechazó los datos normalizados.",
+        False,
+        "inference_contract",
+        "Revisa el contrato de integración y la calidad de los registros de origen.",
+    ),
+    PublicErrorCode.INFERENCE_RESPONSE_ERROR: (
+        "El servicio de predicciones devolvió una respuesta no válida.",
+        False,
+        "inference_response",
+        "Verifica la compatibilidad del contrato de respuesta desplegado.",
     ),
     PublicErrorCode.INTERNAL_ERROR: (
         "Ocurrió un error interno al procesar la consulta financiera.",
@@ -346,6 +388,16 @@ async def _run(
     ctx: Context,
     handler: Callable[[Any, RequestT], Awaitable[dict[str, Any]]],
 ) -> ToolResult:
+    return await _run_with_dependency(tool, request, ctx, database_from_context(ctx), handler)
+
+
+async def _run_with_dependency(
+    tool: str,
+    request: RequestT,
+    ctx: Context,
+    dependency: Any,
+    handler: Callable[[Any, RequestT], Awaitable[dict[str, Any]]],
+) -> ToolResult:
     operation = handler.__name__
     correlation_id = _correlation_id(ctx)
     started_at = perf_counter()
@@ -361,7 +413,7 @@ async def _run(
         },
     )
     try:
-        raw_data = await handler(_database(ctx), request)
+        raw_data = await handler(dependency, request)
         if not isinstance(raw_data, Mapping):
             raise SafeMCPError("invalid_data", "Financial result shape is invalid.")
         data = to_json_safe(raw_data)
@@ -480,4 +532,9 @@ class FinancialValidationMiddleware(Middleware):
         return await call_next(context)
 
 
-__all__ = ["FinancialValidationMiddleware", "_classify_error", "_run"]
+__all__ = [
+    "FinancialValidationMiddleware",
+    "_classify_error",
+    "_run",
+    "_run_with_dependency",
+]

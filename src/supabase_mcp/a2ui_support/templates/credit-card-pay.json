@@ -1,0 +1,103 @@
+[
+  {
+    "version": "v0.9.1",
+    "createSurface": {
+      "surfaceId": "credit-card-pay",
+      "catalogId": "https://fluidbank.app/a2ui/catalogs/finance/v2"
+    }
+  },
+  {
+    "version": "v0.9.1",
+    "updateComponents": {
+      "surfaceId": "credit-card-pay",
+      "components": [
+        {
+          "id": "root",
+          "component": "Column",
+          "children": [
+            "title",
+            "preview",
+            "help",
+            "source_account",
+            "card",
+            "amount",
+            "submit"
+          ]
+        },
+        {
+          "id": "title",
+          "component": "Text",
+          "text": "Pagar tarjeta de crédito",
+          "variant": "h2"
+        },
+        {
+          "id": "help",
+          "component": "Text",
+          "text": {
+            "path": "/help"
+          }
+        },
+        {
+          "id": "preview",
+          "component": "BankingView",
+          "view": {
+            "path": "/preview"
+          }
+        },
+        {
+          "id": "source_account",
+          "component": "TextField",
+          "label": "Cuenta para pagar",
+          "value": {
+            "path": "/form/source_account"
+          }
+        },
+        {
+          "id": "card",
+          "component": "TextField",
+          "label": "Tarjeta de crédito",
+          "value": {
+            "path": "/form/card"
+          }
+        },
+        {
+          "id": "amount",
+          "component": "Slider",
+          "label": "Cantidad a pagar en MXN",
+          "value": {
+            "path": "/form/amount"
+          },
+          "min": 1,
+          "max": 100000
+        },
+        {
+          "id": "submit",
+          "component": "Button",
+          "child": "submit-label",
+          "variant": "primary",
+          "action": {
+            "event": {
+              "name": "credit_card.pay",
+              "context": {
+                "source_account": {
+                  "path": "/form/source_account"
+                },
+                "card": {
+                  "path": "/form/card"
+                },
+                "amount": {
+                  "path": "/form/amount"
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "submit-label",
+          "component": "Text",
+          "text": "Confirmar pago"
+        }
+      ]
+    }
+  }
+]

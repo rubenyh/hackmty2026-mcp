@@ -16,11 +16,15 @@ from supabase_mcp.tools.finance import (
     FINANCIAL_TOOLS,
     analyze_spending,
     compare_debt_scenarios,
+    detect_transaction_anomalies,
+    forecast_cash_balance,
+    forecast_recurring_charges,
     get_accounts,
     get_bank_statements,
     get_beneficiaries,
     get_budget_progress,
     get_cash_flow,
+    get_credit_cards,
     get_debt_overview,
     get_financial_alerts,
     get_financial_overview,
@@ -29,10 +33,10 @@ from supabase_mcp.tools.finance import (
     get_transaction_disputes,
     get_transactions,
     get_upcoming_payments,
+    predict_savings_goal,
 )
-from supabase_mcp.tools.health import health_check
 from supabase_mcp.tools.schema import describe_table, list_allowed_tables
-from supabase_mcp.tools.select import select_rows
+from supabase_mcp.tools.user_context import get_user_context
 
 __all__ = [
     "FINANCIAL_TOOLS",
@@ -46,12 +50,16 @@ __all__ = [
     "database_overview",
     "database_overview_resource",
     "describe_table",
+    "detect_transaction_anomalies",
     "financial_view_resource",
+    "forecast_cash_balance",
+    "forecast_recurring_charges",
     "get_accounts",
     "get_bank_statements",
     "get_beneficiaries",
     "get_budget_progress",
     "get_cash_flow",
+    "get_credit_cards",
     "get_debt_overview",
     "get_financial_alerts",
     "get_financial_overview",
@@ -60,9 +68,9 @@ __all__ = [
     "get_transaction_disputes",
     "get_transactions",
     "get_upcoming_payments",
-    "health_check",
+    "get_user_context",
     "list_allowed_tables",
+    "predict_savings_goal",
     "present_financial_view",
-    "select_rows",
     "visualize_allowed_data",
 ]

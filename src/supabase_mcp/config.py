@@ -6,7 +6,7 @@ import re
 from typing import Annotated, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import Field, SecretStr, field_validator, model_validator
+from pydantic import AnyHttpUrl, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError
@@ -41,6 +41,20 @@ class Settings(BaseSettings):
     actions_secret: SecretStr | None = Field(default=None, validation_alias="MCP_ACTIONS_SECRET")
     actions_database_url: SecretStr | None = Field(
         default=None, validation_alias="MCP_ACTIONS_DATABASE_URL"
+    )
+    inference_api_url: AnyHttpUrl | None = Field(default=None, validation_alias="INFERENCE_API_URL")
+    inference_api_key: SecretStr | None = Field(default=None, validation_alias="INFERENCE_API_KEY")
+    inference_http_timeout_seconds: float = Field(
+        default=30.0,
+        gt=0,
+        le=120,
+        validation_alias="INFERENCE_HTTP_TIMEOUT_SECONDS",
+    )
+    inference_connect_timeout_seconds: float = Field(
+        default=5.0,
+        gt=0,
+        le=30,
+        validation_alias="INFERENCE_CONNECT_TIMEOUT_SECONDS",
     )
     allowed_schemas: CsvTuple = Field(default=("public",), validation_alias="MCP_ALLOWED_SCHEMAS")
     allowed_tables: CsvTuple = Field(default=(), validation_alias="MCP_ALLOWED_TABLES")
@@ -128,6 +142,16 @@ class Settings(BaseSettings):
             raise ValueError("Write actions require MCP_ACTIONS_SECRET with at least 32 characters")
         if self.default_limit > self.max_limit:
             raise ValueError("MCP_DEFAULT_LIMIT cannot exceed MCP_MAX_LIMIT")
+        inference_url_configured = self.inference_api_url is not None
+        inference_key_configured = self.inference_api_key is not None and bool(
+            self.inference_api_key.get_secret_value()
+        )
+        if inference_url_configured != inference_key_configured:
+            raise ValueError("INFERENCE_API_URL and INFERENCE_API_KEY must be configured together")
+        if self.inference_connect_timeout_seconds > self.inference_http_timeout_seconds:
+            raise ValueError(
+                "INFERENCE_CONNECT_TIMEOUT_SECONDS cannot exceed INFERENCE_HTTP_TIMEOUT_SECONDS"
+            )
 
         allowed_schema_set = set(self.allowed_schemas)
         for entry in self.allowed_tables:

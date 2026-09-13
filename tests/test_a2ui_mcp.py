@@ -73,7 +73,7 @@ async def test_a2ui_resource_and_tool_protocol(monkeypatch: pytest.MonkeyPatch) 
         assert {"search_tools", "call_tool"} <= advertised
         assert len(advertised) < 10
         tools = [tool.to_mcp_tool() for tool in await mcp._list_tools()]
-        assert len(tools) == 26
+        assert len(tools) == 30
         for listed_tool in tools:
             json.dumps(listed_tool.input_schema, allow_nan=False)
             assert listed_tool.input_schema.get("additionalProperties") is False
@@ -146,11 +146,7 @@ async def test_a2ui_resource_and_tool_protocol(monkeypatch: pytest.MonkeyPatch) 
         text_content = next(item for item in chat_result.content if isinstance(item, TextContent))
         assert text_content.text == "Hola, ¿en qué ayudo?"
 
-        missing_scope = await client.call_tool(
-            "select_rows",
-            {"schema": "public", "table": "transactions"},
-            raise_on_error=False,
-        )
+        missing_scope = await client.call_tool("get_user_context", {}, raise_on_error=False)
         assert missing_scope.is_error is True
 
         result = await client.call_tool("database_overview", {"limit": 5})

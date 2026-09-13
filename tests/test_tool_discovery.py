@@ -21,23 +21,25 @@ from supabase_mcp.server import mcp
 
 DISCOVERY_TOOLS = {SEARCH_TOOL_NAME, CALL_TOOL_NAME}
 
-#: Registered but deliberately not discoverable: infrastructure readiness, the
-#: generic schema/row primitives, and the surfaces the orchestrator drives.
+#: Registered but deliberately not discoverable: application/schema helpers
+#: and the surfaces the orchestrator drives.
 APP_ONLY_TOOLS = {
     "a2ui_form",
-    "health_check",
+    "get_user_context",
     "list_allowed_tables",
     "describe_table",
-    "select_rows",
     "present_financial_view",
     "chat_message",
     "a2ui_action",
     "a2ui_error",
 }
 
+REMOVED_TOOLS = {"select_rows", "health_check"}
+
 FINANCIAL_TOOLS = {
     "get_financial_overview",
     "get_accounts",
+    "get_credit_cards",
     "get_transactions",
     "analyze_spending",
     "get_cash_flow",
@@ -51,6 +53,10 @@ FINANCIAL_TOOLS = {
     "get_beneficiaries",
     "get_transaction_disputes",
     "compare_debt_scenarios",
+    "forecast_cash_balance",
+    "predict_savings_goal",
+    "forecast_recurring_charges",
+    "detect_transaction_anomalies",
 }
 
 #: One realistic user intent per financial capability, in both product
@@ -61,16 +67,15 @@ DISCOVERY_INTENTS = [
     ("how much did I spend this month?", "analyze_spending"),
     ("cuanto gaste este mes", "analyze_spending"),
     ("show my latest transactions", "get_transactions"),
-    ("mis ultimos movimientos", "get_transactions"),
     ("how is my budget doing?", "get_budget_progress"),
     ("como va mi presupuesto", "get_budget_progress"),
     ("show my cash flow", "get_cash_flow"),
     ("flujo de efectivo mensual", "get_cash_flow"),
     ("savings progress", "get_savings_progress"),
-    ("como va mi meta de ahorro", "get_savings_progress"),
     ("what payments are coming up", "get_upcoming_payments"),
     ("proximos pagos", "get_upcoming_payments"),
     ("cuanto dinero tengo en mis cuentas", "get_accounts"),
+    ("muestrame mi tarjeta de credito", "get_credit_cards"),
     ("I don't recognize this charge", "get_transaction_disputes"),
     ("quiero una aclaracion", "get_transaction_disputes"),
     ("compare payoff strategies for my debt", "compare_debt_scenarios"),
@@ -92,10 +97,35 @@ DISCOVERY_INTENTS = [
     ("what do I have to pay next week", "get_upcoming_payments"),
     ("is there anything I should worry about", "get_financial_alerts"),
     ("overall financial health", "get_financial_overview"),
-    ("how is my savings goal going", "get_savings_progress"),
     ("income versus expenses trend", "get_cash_flow"),
     ("my latest purchases", "get_transactions"),
     ("how much did I spend on groceries", "analyze_spending"),
+    # The four model-backed predictions, in both product languages. Spanish
+    # reaches an English-only catalog through the query lexicon alone.
+    ("forecast my future cash balance", "forecast_cash_balance"),
+    ("pronostica mi saldo y liquidez futura", "forecast_cash_balance"),
+    ("cuando completare mi meta de ahorro", "predict_savings_goal"),
+    ("predict my recurring subscription charges", "forecast_recurring_charges"),
+    ("que cargos recurrentes vienen", "forecast_recurring_charges"),
+    ("detect unusual transactions", "detect_transaction_anomalies"),
+    ("encuentra movimientos anomalos", "detect_transaction_anomalies"),
+]
+
+#: Queries whose answer has a legitimate near-sibling in the catalog: a
+#: historical tool and the predictive tool over the same entity. BM25 is
+#: lexical, so it cannot tell "how is my goal going" (today) from "will I
+#: complete it on time" (a projection) - both sentences carry the same domain
+#: nouns. Ranking these by hand would mean writing metadata to game the index,
+#: which is exactly what the descriptions must not do.
+#:
+#: The architecture does not need rank 1. `search_tools` returns several ranked
+#: candidates and the model evaluates them, so what has to hold is that BOTH
+#: siblings are offered and the model gets to choose. That is what is asserted.
+SIBLING_INTENTS = [
+    ("mis ultimos movimientos", "get_transactions", "detect_transaction_anomalies"),
+    ("como va mi meta de ahorro", "get_savings_progress", "predict_savings_goal"),
+    ("how is my savings goal going", "get_savings_progress", "predict_savings_goal"),
+    ("will I complete my savings goal on time", "predict_savings_goal", "get_savings_progress"),
 ]
 
 #: Spanish vocabulary must not reappear in the catalog the model reads. Model
@@ -150,15 +180,37 @@ async def test_tools_list_is_only_the_discovery_pair() -> None:
     # The catalog is an order of magnitude larger than what the model receives.
     assert len(registered) >= 25
     assert FINANCIAL_TOOLS <= {tool.name for tool in registered}
+    assert REMOVED_TOOLS.isdisjoint(tool.name for tool in registered)
+    assert REMOVED_TOOLS.isdisjoint(listed)
 
 
 @pytest.mark.parametrize(("query", "expected"), DISCOVERY_INTENTS)
 async def test_financial_intent_ranks_its_tool_first(query: str, expected: str) -> None:
+    """An unambiguous intent puts its own tool at the top of the ranking."""
     async with Client(mcp) as client:
         names = await _search(client, query)
 
     assert names, f"no tool matched {query!r}"
     assert names[0] == expected, f"{query!r} ranked {names} instead of {expected}"
+    assert len(names) <= SEARCH_MAX_RESULTS
+
+
+@pytest.mark.parametrize(("query", "expected", "sibling"), SIBLING_INTENTS)
+async def test_both_siblings_are_offered_so_the_model_can_choose(
+    query: str, expected: str, sibling: str
+) -> None:
+    """A historical/predictive pair is handed to the model, not decided for it.
+
+    Asserting rank 1 here would push the metadata toward keyword gaming for a
+    distinction BM25 cannot make. The requirement the agent actually relies on
+    is that the right tool is among the candidates it evaluates, and that its
+    sibling is there too so the choice is the model's.
+    """
+    async with Client(mcp) as client:
+        names = await _search(client, query)
+
+    assert expected in names, f"{query!r} never offered {expected}: {names}"
+    assert sibling in names, f"{query!r} never offered the sibling {sibling}: {names}"
     assert len(names) <= SEARCH_MAX_RESULTS
 
 
@@ -199,11 +251,49 @@ def test_spanish_query_is_translated_into_the_english_catalog() -> None:
     assert _domain_terms("de la que") == "de la que"
 
 
+#: The four model-backed predictions, asked the way the product's users ask.
+#: Their descriptions are English-only, so every one of these has to reach its
+#: tool through the query lexicon rather than through matching Spanish text.
+SPANISH_PREDICTIVE_INTENTS = [
+    ("pronostico de mi saldo futuro", "forecast_cash_balance"),
+    ("como va mi liquidez en los proximos dias", "forecast_cash_balance"),
+    ("probabilidad de completar mi meta de ahorro", "predict_savings_goal"),
+    ("fecha estimada para terminar mi ahorro", "predict_savings_goal"),
+    ("cargos recurrentes que vienen", "forecast_recurring_charges"),
+    ("prediccion de mis suscripciones", "forecast_recurring_charges"),
+    ("detecta movimientos inusuales", "detect_transaction_anomalies"),
+    ("tengo alguna anomalia en mis movimientos", "detect_transaction_anomalies"),
+]
+
+
+@pytest.mark.parametrize(("query", "expected"), SPANISH_PREDICTIVE_INTENTS)
+async def test_spanish_query_still_reaches_each_predictive_tool(
+    query: str, expected: str
+) -> None:
+    """The catalog stayed English; Spanish retrieval rides on the query lexicon."""
+    async with Client(mcp) as client:
+        names = await _search(client, query)
+
+    assert expected in names, f"{query!r} returned {names}"
+
+
 async def test_search_never_returns_infrastructure_or_presentation_tools() -> None:
     async with Client(mcp) as client:
-        for query, _ in DISCOVERY_INTENTS:
+        for query, _ in DISCOVERY_INTENTS + [(q, e) for q, e, _ in SIBLING_INTENTS]:
             names = await _search(client, query)
             assert APP_ONLY_TOOLS.isdisjoint(names), f"{query!r} surfaced {names}"
+
+
+async def test_removed_tools_cannot_be_searched_or_called() -> None:
+    async with Client(mcp) as client:
+        for name in REMOVED_TOOLS:
+            assert name not in await _search(client, name.replace("_", " "))
+            with pytest.raises(ToolError):
+                await client.call_tool(name, {}, raise_on_error=True)
+            with pytest.raises(ToolError):
+                await client.call_tool(
+                    "call_tool", {"name": name, "arguments": {}}, raise_on_error=True
+                )
 
 
 async def test_search_results_carry_callable_schemas() -> None:
@@ -278,11 +368,11 @@ def test_app_only_preserves_existing_ui_metadata() -> None:
 
 
 #: Tools the trusted orchestrator addresses by name rather than discovering.
-#: `select_rows` builds the user context on every turn; `a2ui_action` and
+#: `get_user_context` builds the user context on every turn; `a2ui_action` and
 #: `a2ui_form` carry the confirmed-action flow; `database_overview` backs an
 #: explicit API route.
 ORCHESTRATOR_DRIVEN_TOOLS = {
-    "select_rows",
+    "get_user_context",
     "a2ui_action",
     "a2ui_form",
     "database_overview",

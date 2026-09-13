@@ -35,6 +35,8 @@ from supabase_mcp.discovery import (
     app_only,
     build_tool_search_transform,
 )
+from supabase_mcp.inference import InferenceClient
+from supabase_mcp.services.finance.predictions import PredictionService
 from supabase_mcp.tools import (
     FINANCIAL_TOOLS,
     a2ui_action,
@@ -46,10 +48,9 @@ from supabase_mcp.tools import (
     database_overview_resource,
     describe_table,
     financial_view_resource,
-    health_check,
+    get_user_context,
     list_allowed_tables,
     present_financial_view,
-    select_rows,
     visualize_allowed_data,
 )
 from supabase_mcp.tools.action_forms import a2ui_form
@@ -64,16 +65,25 @@ def load_settings() -> Settings:
 
 @lifespan
 async def app_lifespan(_server: FastMCP[Any]) -> AsyncIterator[dict[str, Any]]:
-    """Create and dispose the one shared database client for this server process."""
+    """Create and dispose the process-scoped database and inference clients."""
     settings = load_settings()
     logging.basicConfig(
         level=getattr(logging, settings.log_level),
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
     database = DatabaseClient(settings)
+    inference = InferenceClient(settings)
     await database.start()
     try:
-        yield {"database": database}
+        await inference.start()
+        try:
+            yield {
+                "database": database,
+                "inference": inference,
+                "predictions": PredictionService(database, inference),
+            }
+        finally:
+            await inference.stop()
     finally:
         await database.stop()
 
@@ -116,10 +126,12 @@ mcp.add_middleware(FinancialValidationMiddleware(FINANCIAL_REQUEST_MODELS))
 #: predictive and actions. FastMCP stores them on the component for filtering
 #: and operator tooling; BM25 indexes names, descriptions and parameters, so
 #: retrieval quality lives in the docstrings, not here. `predictive` marks only
-#: a tool whose purpose is forward projection, not ordinary history.
+#: a tool whose purpose is forward projection or model inference — a forecast,
+#: a completion probability, an anomaly score — never ordinary history.
 FINANCIAL_TOOL_TAGS: dict[str, set[str]] = {
     "get_financial_overview": {"accounts", "budgets", "savings", "debts", "analytics"},
     "get_accounts": {"accounts"},
+    "get_credit_cards": {"accounts", "debts"},
     "get_transactions": {"transactions"},
     "analyze_spending": {"expenses", "analytics"},
     "get_cash_flow": {"cash-flow", "analytics"},
@@ -133,6 +145,10 @@ FINANCIAL_TOOL_TAGS: dict[str, set[str]] = {
     "get_beneficiaries": {"accounts"},
     "get_transaction_disputes": {"transactions"},
     "compare_debt_scenarios": {"debts", "analytics", "predictive"},
+    "forecast_cash_balance": {"cash-flow", "accounts", "predictive"},
+    "predict_savings_goal": {"savings", "predictive"},
+    "forecast_recurring_charges": {"expenses", "transactions", "predictive"},
+    "detect_transaction_anomalies": {"transactions", "analytics", "predictive"},
 }
 
 #: Human-readable English display titles. FastMCP would otherwise derive a
@@ -140,6 +156,7 @@ FINANCIAL_TOOL_TAGS: dict[str, set[str]] = {
 FINANCIAL_TOOL_TITLES: dict[str, str] = {
     "get_financial_overview": "Financial overview",
     "get_accounts": "Accounts and balances",
+    "get_credit_cards": "Credit cards",
     "get_transactions": "Individual transactions",
     "analyze_spending": "Spending analysis",
     "get_cash_flow": "Monthly cash flow",
@@ -153,18 +170,19 @@ FINANCIAL_TOOL_TITLES: dict[str, str] = {
     "get_beneficiaries": "Saved beneficiaries",
     "get_transaction_disputes": "Transaction disputes",
     "compare_debt_scenarios": "Debt payoff scenario comparison",
+    "forecast_cash_balance": "Cash balance forecast",
+    "predict_savings_goal": "Savings goal completion forecast",
+    "forecast_recurring_charges": "Recurring charge forecast",
+    "detect_transaction_anomalies": "Transaction anomaly detection",
 }
 
 
-# Infrastructure and generic schema primitives. They stay registered and stay
+# Application and schema primitives. They stay registered and stay
 # callable by the trusted orchestrator, but they are declared host/app-only so
-# tool search and the `call_tool` proxy never hand them to a model: readiness
-# checks and a generic row reader are not banking capabilities, and letting
-# discovery surface them would widen model reach rather than narrow context.
-mcp.tool(health_check, tags={"infrastructure"}, meta=app_only())
+# tool search and the `call_tool` proxy never hand them to a model.
+mcp.tool(get_user_context, tags={"application", "context"}, meta=app_only())
 mcp.tool(list_allowed_tables, tags={"schema"}, meta=app_only())
 mcp.tool(describe_table, tags={"schema"}, meta=app_only())
-mcp.tool(select_rows, tags={"schema"}, meta=app_only())
 for financial_tool in FINANCIAL_TOOLS:
     mcp.tool(
         financial_tool,
@@ -285,8 +303,8 @@ mcp.resource(
 
 
 # Progressive discovery is installed last so it transforms the complete
-# catalog: `tools/list` collapses to `search_tools` + `call_tool`, while every
-# tool above stays registered, individually specialized and callable.
+# catalog: the model-facing list collapses to `search_tools` + `call_tool`, while
+# app-only host handlers remain pinned and every domain tool stays registered.
 mcp.add_middleware(DiscoveryLoggingMiddleware())
 mcp.add_transform(build_tool_search_transform())
 

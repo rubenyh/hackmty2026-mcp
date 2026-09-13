@@ -46,14 +46,14 @@ SEARCH_MAX_RESULTS = 5
 #: answers `Unknown tool` however it is addressed - unlike a direct FastMCP
 #: server, which happily delegates to it. Callable therefore means advertised,
 #: and the three tools the trusted orchestrator invokes by name have to stay on
-#: the list: `select_rows` builds the user context every turn, and `a2ui_action`
-#: and `a2ui_form` carry the confirmed-action flow the client drives.
+#: the list: `get_user_context` initializes every turn, and `a2ui_action` and
+#: `a2ui_form` carry the confirmed-action flow the client drives.
 #:
 #: All three remain `app_only`, so tool search and the `call_tool` proxy still
 #: refuse them and a model can neither discover nor invoke them. Pinning widens
 #: what the host can address, not what the model can reach. Everything else -
 #: every financial capability - is found through search.
-ALWAYS_VISIBLE: tuple[str, ...] = ("select_rows", "a2ui_action", "a2ui_form")
+ALWAYS_VISIBLE: tuple[str, ...] = ("get_user_context", "a2ui_action", "a2ui_form")
 
 #: Longest search query fragment that may reach a debug log line.
 _QUERY_LOG_LIMIT = 120
@@ -102,6 +102,10 @@ _QUERY_LEXICON: dict[str, str] = {
     "ahorros": "savings",
     "alerta": "alert",
     "alertas": "alerts",
+    "anomalia": "anomaly unusual",
+    "anomalias": "anomalies unusual",
+    "anomalo": "anomalous unusual",
+    "anomalos": "anomalous unusual",
     "avance": "progress",
     "aviso": "alert",
     "avisos": "alerts",
@@ -117,6 +121,7 @@ _QUERY_LEXICON: dict[str, str] = {
     "compara": "compare",
     "comparacion": "comparison",
     "comparar": "compare",
+    "completare": "completion reached",
     "compra": "purchase",
     "compras": "purchases",
     "corte": "cutoff",
@@ -126,6 +131,8 @@ _QUERY_LEXICON: dict[str, str] = {
     "debo": "owe",
     "destinatario": "recipient payee",
     "destinatarios": "recipients payees",
+    "detecta": "detect anomaly",
+    "detectar": "detect anomaly",
     "deuda": "debt",
     "deudas": "debts",
     "dinero": "money",
@@ -133,10 +140,16 @@ _QUERY_LEXICON: dict[str, str] = {
     "egresos": "expenses",
     "escenario": "scenario",
     "escenarios": "scenarios",
+    "estimacion": "estimate",
+    "estimada": "estimated",
+    "estimado": "estimated",
     "estrategia": "strategy",
     "estrategias": "strategies",
     "flujo": "cash",
     "fraude": "fraudulent",
+    "futura": "future",
+    "futuro": "future",
+    "futuros": "future",
     "gasta": "spent",
     "gastar": "spend",
     "gaste": "spent",
@@ -146,7 +159,10 @@ _QUERY_LEXICON: dict[str, str] = {
     "guardados": "saved",
     "ingreso": "income",
     "ingresos": "income",
+    "inusual": "unusual anomaly",
+    "inusuales": "unusual anomaly",
     "limite": "limit",
+    "liquidez": "balance cash",
     "mensual": "monthly",
     "mes": "month",
     "meta": "goal",
@@ -159,16 +175,32 @@ _QUERY_LEXICON: dict[str, str] = {
     "panorama": "overview",
     "pendiente": "outstanding",
     "pendientes": "outstanding",
+    "predecir": "predict",
+    "prediccion": "prediction",
+    "predicciones": "predictions",
     "presupuesto": "budget",
     "presupuestos": "budgets",
+    "probabilidad": "probability",
+    "pronostica": "forecast",
+    "pronosticar": "forecast",
+    "pronostico": "forecast",
     "proximo": "upcoming",
     "proximos": "upcoming",
+    "proyeccion": "projection projected",
+    "proyecta": "project",
+    "proyectar": "project",
+    "raro": "unusual anomaly",
+    "raros": "unusual anomaly",
     "reclamacion": "dispute",
+    "recurrente": "recurring repeating",
+    "recurrentes": "recurring repeating",
     "resumen": "overview",
     "riesgo": "risk",
     "saldo": "balance",
     "saldos": "balances",
     "salud": "health",
+    "sospechoso": "suspicious anomaly",
+    "sospechosos": "suspicious anomaly",
     "suscripcion": "subscription",
     "suscripciones": "subscription",
     "tarjeta": "card",
@@ -179,6 +211,8 @@ _QUERY_LEXICON: dict[str, str] = {
     "urgente": "urgent",
     "vencimiento": "due date",
     "vencimientos": "due dates",
+    "vendran": "upcoming expected",
+    "venir": "upcoming expected",
 }
 
 
