@@ -5,10 +5,24 @@ from __future__ import annotations
 import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import date, datetime, time
 from numbers import Number
 from typing import Any
 
-from sqlalchemy import MetaData, Select, Table, asc, desc, exists, inspect, select, text
+from sqlalchemy import (
+    Date,
+    DateTime,
+    MetaData,
+    Select,
+    Table,
+    Time,
+    asc,
+    desc,
+    exists,
+    inspect,
+    select,
+    text,
+)
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, create_async_engine
 
@@ -74,6 +88,61 @@ TABLE_USER_SCOPES: dict[tuple[str, str], TableUserScope] = {
         owner_column="user_id",
     ),
 }
+
+
+_TEMPORAL_MESSAGE = "Filters on a date or time column require an ISO 8601 string value."
+# Operators whose value is compared against the column. IS_NULL carries a
+# boolean flag and LIKE/ILIKE carry patterns, so neither is a temporal value.
+_COMPARISON_OPERATORS = frozenset(
+    {
+        FilterOperator.EQ,
+        FilterOperator.NE,
+        FilterOperator.GT,
+        FilterOperator.GTE,
+        FilterOperator.LT,
+        FilterOperator.LTE,
+        FilterOperator.IN,
+    }
+)
+
+
+def _temporal_value(value: Any, column_type: Any) -> date | datetime | time | None:
+    """Parse one JSON filter value into the object a temporal column compares against.
+
+    Filter values arrive as JSON scalars, so a timestamp reaches us as a string.
+    Binding that string against a DateTime column produced a predicate that was
+    never true: every date-bounded query returned zero rows and no error, so
+    balances kept working while spending, transactions and every dated chart
+    came back silently empty.
+    """
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, str):
+        raise InvalidSelectionError("invalid_filter_value", _TEMPORAL_MESSAGE)
+    try:
+        if isinstance(column_type, Time):
+            return time.fromisoformat(value)
+        if isinstance(column_type, Date):
+            # A caller may send a full timestamp for a date column; keep the day.
+            try:
+                return date.fromisoformat(value)
+            except ValueError:
+                return datetime.fromisoformat(value).date()
+        return datetime.fromisoformat(value)
+    except ValueError:
+        raise InvalidSelectionError("invalid_filter_value", _TEMPORAL_MESSAGE) from None
+
+
+def _comparison_value(column: Any, condition: FilterCondition) -> Any:
+    """Return the filter value with temporal strings converted, others untouched."""
+    if condition.operator not in _COMPARISON_OPERATORS:
+        return condition.value
+    column_type = column.type
+    if not isinstance(column_type, Date | DateTime | Time):
+        return condition.value
+    if isinstance(condition.value, list):
+        return [_temporal_value(item, column_type) for item in condition.value]
+    return _temporal_value(condition.value, column_type)
 
 
 class DatabaseClient:
@@ -338,7 +407,9 @@ class DatabaseClient:
     @staticmethod
     def _filter_expression(column: Any, condition: FilterCondition) -> Any:
         operator = condition.operator
-        value = condition.value
+        if operator is FilterOperator.IS_NULL:
+            return column.is_(None) if condition.value else column.is_not(None)
+        value = _comparison_value(column, condition)
         if operator is FilterOperator.EQ:
             return column == value
         if operator is FilterOperator.NE:
@@ -357,8 +428,6 @@ class DatabaseClient:
             return column.like(value)
         if operator is FilterOperator.ILIKE:
             return column.ilike(value)
-        if operator is FilterOperator.IS_NULL:
-            return column.is_(None) if value else column.is_not(None)
         raise InvalidSelectionError("operator_not_allowed", "The filter operator is not allowed.")
 
     async def select_rows(self, request: SelectRequest) -> tuple[list[dict[str, Any]], int, bool]:

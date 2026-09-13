@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from datetime import date, datetime
 from uuid import UUID
 
 import pytest
-from sqlalchemy import Boolean, Column, MetaData, Numeric, String, Table
+from sqlalchemy import Boolean, Column, Date, DateTime, MetaData, Numeric, String, Table
 from sqlalchemy.dialects import postgresql
 
 from supabase_mcp.config import Settings
@@ -68,6 +69,8 @@ def _client() -> DatabaseClient:
         Column("account_id", postgresql.UUID(as_uuid=True), nullable=False),
         Column("category", String, nullable=False),
         Column("amount", Numeric, nullable=False),
+        Column("occurred_at", DateTime(timezone=True), nullable=False),
+        Column("posted_on", Date, nullable=True),
         schema="public",
     )
     subscriptions = Table(
@@ -184,3 +187,76 @@ async def test_any_real_user_is_accepted_without_a_demo_flag() -> None:
         UserScope(user_id=USER_A),
     )
     assert "is_demo" not in str(captured[0])
+
+
+def _transactions_filter(value: object, *, column: str = "occurred_at", operator: str = "gte"):
+    statement, _limit = _client().build_select(
+        SelectRequest.model_validate(
+            {
+                "schema": "public",
+                "table": "transactions",
+                "scope": {"user_id": USER_A},
+                "filters": [{"column": column, "operator": operator, "value": value}],
+            }
+        )
+    )
+    return statement.compile(dialect=postgresql.dialect())
+
+
+def test_a_timestamp_filter_binds_a_datetime_rather_than_its_string() -> None:
+    """A bound string never compared true, so every dated query returned nothing."""
+    compiled = _transactions_filter("2026-08-14T00:00:37.023045+00:00")
+
+    assert "public.transactions.occurred_at >=" in str(compiled)
+    bound = [value for value in compiled.params.values() if isinstance(value, datetime)]
+    assert bound == [datetime.fromisoformat("2026-08-14T00:00:37.023045+00:00")]
+    assert not any(isinstance(value, str) for value in compiled.params.values())
+
+
+def test_every_accepted_timestamp_spelling_reaches_the_same_instant() -> None:
+    expected = datetime.fromisoformat("2026-08-14T00:00:00+00:00")
+    for spelling in (
+        "2026-08-14T00:00:00+00:00",
+        "2026-08-14T00:00:00Z",
+        "2026-08-14 00:00:00+00:00",
+    ):
+        compiled = _transactions_filter(spelling)
+        assert expected in compiled.params.values(), spelling
+
+
+def test_a_date_column_keeps_the_day_from_either_spelling() -> None:
+    for spelling in ("2026-08-14", "2026-08-14T09:30:00+00:00"):
+        compiled = _transactions_filter(spelling, column="posted_on")
+        assert date(2026, 8, 14) in compiled.params.values(), spelling
+
+
+def test_a_list_of_timestamps_is_converted_element_by_element() -> None:
+    compiled = _transactions_filter(
+        ["2026-08-14T00:00:00+00:00", "2026-08-15T00:00:00+00:00"],
+        operator="in",
+    )
+    # An IN clause binds one expanding parameter holding the whole list.
+    bound = [value for value in compiled.params.values() if isinstance(value, list)]
+    assert bound == [
+        [
+            datetime.fromisoformat("2026-08-14T00:00:00+00:00"),
+            datetime.fromisoformat("2026-08-15T00:00:00+00:00"),
+        ]
+    ]
+
+
+def test_an_unparseable_temporal_filter_is_refused_instead_of_returning_nothing() -> None:
+    """Silence was the real defect: a bad value must be an error, not zero rows."""
+    for value in ("not-a-date", "2026-13-45T00:00:00+00:00", 1_760_000_000):
+        with pytest.raises(InvalidSelectionError, match="ISO 8601"):
+            _transactions_filter(value)
+
+
+def test_non_temporal_filters_are_left_exactly_as_they_were() -> None:
+    compiled = _transactions_filter("groceries", column="category", operator="eq")
+    assert "groceries" in compiled.params.values()
+
+
+def test_is_null_on_a_timestamp_column_still_takes_its_boolean() -> None:
+    compiled = _transactions_filter(False, column="occurred_at", operator="is_null")
+    assert "occurred_at IS NOT NULL" in str(compiled)
