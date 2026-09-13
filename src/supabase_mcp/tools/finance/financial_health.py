@@ -15,20 +15,23 @@ from supabase_mcp.tools.finance._shared import _run
 
 
 async def get_financial_overview(request: FinancialOverviewRequest, ctx: Context) -> ToolResult:
-    """Resumen financiero general / General financial overview.
+    """Resumen financiero general / Whole-picture financial overview.
 
-    Use for broad health, monthly summary, balances, budgets, savings, debts,
-    obligations, and alerts in one call; do not manually combine narrower tools.
-    Úsala para panorama general, resumen mensual o señales preocupantes.
+    Balances, budgets, savings goals, debts, upcoming obligations and alerts in
+    a single call. Covers the broad question; a narrow question belongs to the
+    narrow tool. Claves: resumen, panorama, panorama financiero, salud
+    financiera, finanzas en general, overall summary, financial health.
     """
     return await _run("get_financial_overview", request, ctx, get_financial_overview_data)
 
 
 async def get_financial_alerts(request: FinancialAlertsRequest, ctx: Context) -> ToolResult:
-    """Alertas financieras / Financial alerts.
+    """Alertas y avisos financieros / Financial alerts and warnings.
 
-    Use for warnings filtered by kind, account, budget, urgency, and due date.
-    Úsala para avisos, riesgos y señales urgentes.
+    Warnings filtered by kind, account, budget, urgency and due date:
+    overdraft risk, budget overruns, unusual charges and urgent dates. Claves:
+    alerta, alertas, aviso, avisos, advertencia, advertencias, riesgo, urgente,
+    alert, alerts, warning, warnings, risks.
     """
     return await _run("get_financial_alerts", request, ctx, get_financial_alerts_data)
 

@@ -135,6 +135,39 @@ uv run fastmcp inspect src/supabase_mcp/server.py:mcp
 
 Importing or inspecting the object does not load `Settings`, start a transport, construct a database engine, or connect to Supabase. Runtime settings and database reflection begin only when FastMCP enters `app_lifespan`.
 
+## Tool discovery
+
+`tools/list` does not carry the domain catalog. FastMCP's `BM25SearchTransform`
+replaces it with two synthetic tools, so an LLM receives two schemas instead of
+twenty-six:
+
+```text
+search_tools(query)          natural-language search over the catalog
+call_tool(name, arguments)   executes a discovered tool
+```
+
+Every tool below stays registered and stays individually specialized; only its
+advertisement changed. A client discovers a capability with `search_tools`,
+which returns complete, self-contained tool definitions ranked by relevance,
+then executes it with `call_tool`.
+
+`tools/list` also carries `select_rows`, `a2ui_action` and `a2ui_form`. They are
+pinned so a *host* can address them by name — a hosted deployment proxies this
+server and resolves `tools/call` against the advertised catalog, so an
+unadvertised tool is not callable at all. All three are still declared app-only,
+so tool search and `call_tool` refuse them and no model can reach them.
+
+Search returns at most five tools. Infrastructure, presentation and
+confirmed-action tools (`health_check`, `list_allowed_tables`, `describe_table`,
+`select_rows`, `present_financial_view`, `chat_message`, `a2ui_action`,
+`a2ui_error`, `a2ui_form`) declare `_meta.ui.visibility = ["app"]`, so neither
+search nor `call_tool` exposes them to a model. A trusted orchestrator still
+calls them directly by name, which is how the form-and-confirm write flow works.
+
+```bash
+uv run fastmcp inspect src/supabase_mcp/server.py:mcp
+```
+
 ## Tools
 
 - `health_check`: runs a sanitized `SELECT 1` readiness check.
@@ -146,6 +179,9 @@ Importing or inspecting the object does not load `Settings`, start a transport, 
 - `present_financial_view`: validates one semantic `BankingView` against the authoritative Finance v2 schema and returns the stable composed financial surface.
 - `a2ui_action`: dispatches the five A2UI action fields through an explicit read-only allowlist, with trusted application scope carried separately. It supports bounded overview refresh and financial-view requests.
 - `a2ui_error`: safely acknowledges client rendering and validation reports without echoing their potentially sensitive message.
+- Fifteen financial domain tools: `get_financial_overview`, `get_accounts`, `get_transactions`, `analyze_spending`, `get_cash_flow`, `get_budget_progress`, `get_savings_progress`, `get_debt_overview`, `get_upcoming_payments`, `get_financial_alerts`, `get_bank_statements`, `get_payment_activity`, `get_beneficiaries`, `get_transaction_disputes`, and `compare_debt_scenarios`. Each takes a scoped typed request and is reached through `search_tools`.
+
+Because BM25 ranks on names, descriptions and parameter names, a new domain tool becomes discoverable by describing it well: a bilingual one-line purpose, an explicit boundary against the neighbouring tool, and the vocabulary a user would actually type. Tags are recorded on the component for filtering and are not part of the ranking.
 
 The fifteen financial domain tools return structured failures with `isError: true`.
 Clients receive a stable uppercase error code, the tool and operation, a layer,

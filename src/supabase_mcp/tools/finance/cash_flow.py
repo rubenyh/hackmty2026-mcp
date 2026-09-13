@@ -9,10 +9,13 @@ from supabase_mcp.tools.finance._shared import _run
 
 
 async def get_cash_flow(request: CashFlowRequest, ctx: Context) -> ToolResult:
-    """Ingresos contra gastos en el tiempo / Income versus expenses over time.
+    """Flujo de efectivo mensual / Monthly cash flow.
 
-    Use for 3, 6, or 12-month cash-flow trends; for categories use
-    analyze_spending. Úsala para comparar ingresos, gastos y neto por mes.
+    Income against expenses and the resulting net per calendar month, across a
+    3, 6 or 12 month window. Trend over time; a category breakdown inside one
+    period belongs to analyze_spending. Claves: flujo, flujo de efectivo,
+    ingresos, egresos, ingresos contra gastos, cash flow, income versus
+    expenses, monthly trend.
     """
     return await _run("get_cash_flow", request, ctx, get_cash_flow_data)
 
