@@ -12,6 +12,12 @@ from supabase_mcp.models import StrictModel
 
 CONTRACT = json.loads(files(__package__).joinpath("actions.json").read_text())
 ACTIONS = {entry["name"]: entry for entry in CONTRACT["actions"]}
+
+#: Every declared action that commits a change — a budget, a savings goal, a
+#: transfer, a card payment. `.load` actions only re-read the user's own rows to
+#: refill a form. Derived from the contract rather than written out, so a newly
+#: declared write cannot silently skip the `actionProof` check in `a2ui_action`.
+WRITE_ACTIONS = frozenset(name for name in ACTIONS if not name.endswith(".load"))
 Amount = Annotated[StrictFloat | StrictInt, Field(ge=0, le=1_000_000)]
 
 

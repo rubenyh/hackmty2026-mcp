@@ -18,9 +18,12 @@ class ForecastCashBalanceRequest(StrictModel):
     """Select one owned account and an allowed liquidity forecast horizon."""
 
     scope: UserScope
-    account_id: UUID = Field(description="Owned account whose future cash balance is requested")
+    account_id: UUID = Field(
+        description="Account whose future balance is projected; must belong to the user."
+    )
     horizon_days: Literal[7, 15, 30] = Field(
-        default=30, description="Cash-balance forecast horizon in days"
+        default=30,
+        description="How many days ahead to project the balance: 7, 15 or 30.",
     )
 
 
@@ -28,16 +31,23 @@ class PredictSavingsGoalRequest(StrictModel):
     """Select one owned savings goal for completion probability and date prediction."""
 
     scope: UserScope
-    goal_id: UUID = Field(description="Owned savings goal to predict")
+    goal_id: UUID = Field(
+        description="Savings goal whose completion is predicted; must belong to the user."
+    )
 
 
 class ForecastRecurringChargesRequest(StrictModel):
     """Select one owned account and a future recurring-charge forecast period."""
 
     scope: UserScope
-    account_id: UUID = Field(description="Owned account whose recurring charges are requested")
+    account_id: UUID = Field(
+        description="Account whose repeating charges are forecast; must belong to the user."
+    )
     forecast_days: int = Field(
-        default=30, ge=7, le=365, description="Future charge forecast period in days"
+        default=30,
+        ge=7,
+        le=365,
+        description="How many days ahead to forecast expected charges, from 7 to 365.",
     )
 
 
@@ -45,12 +55,17 @@ class DetectTransactionAnomaliesRequest(StrictModel):
     """Select one owned account and the recent candidate period to evaluate."""
 
     scope: UserScope
-    account_id: UUID = Field(description="Owned account whose transactions are evaluated")
+    account_id: UUID = Field(
+        description="Account whose transactions are scored; must belong to the user."
+    )
     candidate_days: int = Field(
         default=7,
         ge=1,
         le=90,
-        description="Most recent number of days treated as anomaly candidates",
+        description=(
+            "How many of the most recent days are scored for anomalies; earlier "
+            "transactions form the baseline."
+        ),
     )
 
 

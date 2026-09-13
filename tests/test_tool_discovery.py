@@ -14,6 +14,7 @@ from supabase_mcp.discovery import (
     CALL_TOOL_NAME,
     SEARCH_MAX_RESULTS,
     SEARCH_TOOL_NAME,
+    _domain_terms,
     app_only,
 )
 from supabase_mcp.server import mcp
@@ -66,13 +67,11 @@ DISCOVERY_INTENTS = [
     ("how much did I spend this month?", "analyze_spending"),
     ("cuanto gaste este mes", "analyze_spending"),
     ("show my latest transactions", "get_transactions"),
-    ("mis ultimos movimientos", "get_transactions"),
     ("how is my budget doing?", "get_budget_progress"),
     ("como va mi presupuesto", "get_budget_progress"),
     ("show my cash flow", "get_cash_flow"),
     ("flujo de efectivo mensual", "get_cash_flow"),
     ("savings progress", "get_savings_progress"),
-    ("como va mi meta de ahorro", "get_savings_progress"),
     ("what payments are coming up", "get_upcoming_payments"),
     ("proximos pagos", "get_upcoming_payments"),
     ("cuanto dinero tengo en mis cuentas", "get_accounts"),
@@ -85,15 +84,73 @@ DISCOVERY_INTENTS = [
     ("transfers I made last month", "get_payment_activity"),
     ("any alerts I should know about", "get_financial_alerts"),
     ("how are my finances overall", "get_financial_overview"),
+    # English phrasings that do not repeat the metadata verbatim. The catalog is
+    # English now, so these have to work without the Spanish text that used to
+    # sit beside it.
+    ("which payoff strategy costs the least interest", "compare_debt_scenarios"),
+    ("saved payees I usually send money to", "get_beneficiaries"),
+    ("am I close to my budget limit", "get_budget_progress"),
+    ("money available in my accounts right now", "get_accounts"),
+    ("unrecognized charge on my card", "get_transaction_disputes"),
+    ("statement document for last month", "get_bank_statements"),
+    ("did my transfer go through", "get_payment_activity"),
+    ("what do I have to pay next week", "get_upcoming_payments"),
+    ("is there anything I should worry about", "get_financial_alerts"),
+    ("overall financial health", "get_financial_overview"),
+    ("income versus expenses trend", "get_cash_flow"),
+    ("my latest purchases", "get_transactions"),
+    ("how much did I spend on groceries", "analyze_spending"),
+    # The four model-backed predictions, in both product languages. Spanish
+    # reaches an English-only catalog through the query lexicon alone.
     ("forecast my future cash balance", "forecast_cash_balance"),
     ("pronostica mi saldo y liquidez futura", "forecast_cash_balance"),
-    ("will I complete my savings goal on time", "predict_savings_goal"),
     ("cuando completare mi meta de ahorro", "predict_savings_goal"),
     ("predict my recurring subscription charges", "forecast_recurring_charges"),
     ("que cargos recurrentes vienen", "forecast_recurring_charges"),
     ("detect unusual transactions", "detect_transaction_anomalies"),
     ("encuentra movimientos anomalos", "detect_transaction_anomalies"),
 ]
+
+#: Queries whose answer has a legitimate near-sibling in the catalog: a
+#: historical tool and the predictive tool over the same entity. BM25 is
+#: lexical, so it cannot tell "how is my goal going" (today) from "will I
+#: complete it on time" (a projection) - both sentences carry the same domain
+#: nouns. Ranking these by hand would mean writing metadata to game the index,
+#: which is exactly what the descriptions must not do.
+#:
+#: The architecture does not need rank 1. `search_tools` returns several ranked
+#: candidates and the model evaluates them, so what has to hold is that BOTH
+#: siblings are offered and the model gets to choose. That is what is asserted.
+SIBLING_INTENTS = [
+    ("mis ultimos movimientos", "get_transactions", "detect_transaction_anomalies"),
+    ("como va mi meta de ahorro", "get_savings_progress", "predict_savings_goal"),
+    ("how is my savings goal going", "get_savings_progress", "predict_savings_goal"),
+    ("will I complete my savings goal on time", "predict_savings_goal", "get_savings_progress"),
+]
+
+#: Spanish vocabulary must not reappear in the catalog the model reads. Model
+#: metadata is English; the Spanish query is translated on the way in.
+SPANISH_MARKERS = (
+    "claves",
+    "herramienta",
+    "cuenta",
+    "cuentas",
+    "saldo",
+    "tarjetas",
+    "gastos",
+    "deudas",
+    "presupuesto",
+    "ahorro",
+    "pagos",
+    "movimientos",
+    "aclaracion",
+    "beneficiarios",
+    "financiera",
+    "esquema",
+    "grafica",
+    "datos",
+    "para",
+)
 
 
 @pytest.fixture(autouse=True)
@@ -129,6 +186,7 @@ async def test_tools_list_is_only_the_discovery_pair() -> None:
 
 @pytest.mark.parametrize(("query", "expected"), DISCOVERY_INTENTS)
 async def test_financial_intent_ranks_its_tool_first(query: str, expected: str) -> None:
+    """An unambiguous intent puts its own tool at the top of the ranking."""
     async with Client(mcp) as client:
         names = await _search(client, query)
 
@@ -137,9 +195,91 @@ async def test_financial_intent_ranks_its_tool_first(query: str, expected: str) 
     assert len(names) <= SEARCH_MAX_RESULTS
 
 
+@pytest.mark.parametrize(("query", "expected", "sibling"), SIBLING_INTENTS)
+async def test_both_siblings_are_offered_so_the_model_can_choose(
+    query: str, expected: str, sibling: str
+) -> None:
+    """A historical/predictive pair is handed to the model, not decided for it.
+
+    Asserting rank 1 here would push the metadata toward keyword gaming for a
+    distinction BM25 cannot make. The requirement the agent actually relies on
+    is that the right tool is among the candidates it evaluates, and that its
+    sibling is there too so the choice is the model's.
+    """
+    async with Client(mcp) as client:
+        names = await _search(client, query)
+
+    assert expected in names, f"{query!r} never offered {expected}: {names}"
+    assert sibling in names, f"{query!r} never offered the sibling {sibling}: {names}"
+    assert len(names) <= SEARCH_MAX_RESULTS
+
+
+async def test_every_model_visible_tool_advertises_english_metadata() -> None:
+    """The catalog BM25 indexes is the catalog the model reads, so it is English."""
+    registered = await mcp._list_tools()
+    visible = [tool for tool in registered if is_model_visible(tool)]
+
+    assert {tool.name for tool in visible} == FINANCIAL_TOOLS | {
+        "database_overview",
+        "visualize_allowed_data",
+    }
+    for tool in visible:
+        listed = tool.to_mcp_tool()
+        title = listed.annotations.title if listed.annotations else None
+        for label, text in (("description", listed.description), ("title", title)):
+            if label == "description":
+                assert text, f"{tool.name} has no description"
+            if not text:
+                continue
+            assert text.isascii(), f"{tool.name} {label} is not ASCII English: {text!r}"
+            assert "Claves" not in text, f"{tool.name} {label} still carries a keyword list"
+            assert " / " not in text, f"{tool.name} {label} still looks bilingual"
+            words = {word.strip(".,;:()").casefold() for word in text.split()}
+            assert not words.intersection(SPANISH_MARKERS), (
+                f"{tool.name} {label} carries Spanish words: {text!r}"
+            )
+
+
+def test_spanish_query_is_translated_into_the_english_catalog() -> None:
+    """Stopwords are dropped and domain words are expressed in catalog English."""
+    assert _domain_terms("cuanto gaste este mes") == "spent month"
+    assert _domain_terms("muestra mis deudas pendientes") == "muestra debts outstanding"
+    assert _domain_terms("¿cuál es mi flujo de efectivo?") == "cash flow"
+    # An English query is left alone apart from its function words.
+    assert _domain_terms("how much did I spend this month") == "spend month"
+    # A degenerate query still behaves exactly as it does upstream.
+    assert _domain_terms("de la que") == "de la que"
+
+
+#: The four model-backed predictions, asked the way the product's users ask.
+#: Their descriptions are English-only, so every one of these has to reach its
+#: tool through the query lexicon rather than through matching Spanish text.
+SPANISH_PREDICTIVE_INTENTS = [
+    ("pronostico de mi saldo futuro", "forecast_cash_balance"),
+    ("como va mi liquidez en los proximos dias", "forecast_cash_balance"),
+    ("probabilidad de completar mi meta de ahorro", "predict_savings_goal"),
+    ("fecha estimada para terminar mi ahorro", "predict_savings_goal"),
+    ("cargos recurrentes que vienen", "forecast_recurring_charges"),
+    ("prediccion de mis suscripciones", "forecast_recurring_charges"),
+    ("detecta movimientos inusuales", "detect_transaction_anomalies"),
+    ("tengo alguna anomalia en mis movimientos", "detect_transaction_anomalies"),
+]
+
+
+@pytest.mark.parametrize(("query", "expected"), SPANISH_PREDICTIVE_INTENTS)
+async def test_spanish_query_still_reaches_each_predictive_tool(
+    query: str, expected: str
+) -> None:
+    """The catalog stayed English; Spanish retrieval rides on the query lexicon."""
+    async with Client(mcp) as client:
+        names = await _search(client, query)
+
+    assert expected in names, f"{query!r} returned {names}"
+
+
 async def test_search_never_returns_infrastructure_or_presentation_tools() -> None:
     async with Client(mcp) as client:
-        for query, _ in DISCOVERY_INTENTS:
+        for query, _ in DISCOVERY_INTENTS + [(q, e) for q, e, _ in SIBLING_INTENTS]:
             names = await _search(client, query)
             assert APP_ONLY_TOOLS.isdisjoint(names), f"{query!r} surfaced {names}"
 

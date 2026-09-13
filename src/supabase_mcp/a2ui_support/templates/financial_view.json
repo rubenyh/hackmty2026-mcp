@@ -14,12 +14,14 @@
         {
           "id": "root",
           "component": "Column",
-          "children": ["banking_view", "request_financial_view_button"]
+          "children": ["banking_view", "request_financial_view_button"],
+          "accessibility": {"label": {"path": "/viewLabel"}}
         },
         {
           "id": "banking_view",
           "component": "BankingView",
-          "view": {"path": "/view"}
+          "view": {"path": "/view"},
+          "accessibility": {"label": {"path": "/viewLabel"}}
         },
         {
           "id": "request_financial_view_label",
@@ -31,6 +33,7 @@
           "component": "Button",
           "child": "request_financial_view_label",
           "variant": "primary",
+          "accessibility": {"label": {"path": "/actionLabel"}},
           "action": {
             "event": {
               "name": "request_financial_view",

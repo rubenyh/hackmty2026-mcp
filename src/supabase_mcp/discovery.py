@@ -19,6 +19,7 @@ Discovery is advertisement; authorization stays exactly where it already is.
 from __future__ import annotations
 
 import logging
+import unicodedata
 from collections.abc import Sequence
 from typing import Any
 
@@ -81,16 +82,158 @@ _QUERY_STOPWORDS = frozenset(
 )
 
 
-def _domain_terms(query: str) -> str:
-    """Drop function words so BM25 ranks on the financial vocabulary.
+#: Spanish domain vocabulary mapped onto the English tool metadata.
+#:
+#: Model-facing descriptions are English, but the product speaks Spanish and the
+#: orchestrator hands BM25 the user's own words. BM25 matches literal tokens, so
+#: "deudas pendientes" would score zero against an English catalog. Translating
+#: the QUERY — never the index — keeps retrieval working without stuffing
+#: Spanish keywords into what the model reads. Every value below is vocabulary
+#: that genuinely appears in a tool description.
+_QUERY_LEXICON: dict[str, str] = {
+    "abono": "contribution",
+    "abonos": "contributions",
+    "aclaracion": "dispute",
+    "aclaraciones": "disputes",
+    "advertencia": "warning",
+    "advertencias": "warnings",
+    "ahorrar": "savings",
+    "ahorro": "savings",
+    "ahorros": "savings",
+    "alerta": "alert",
+    "alertas": "alerts",
+    "anomalia": "anomaly unusual",
+    "anomalias": "anomalies unusual",
+    "anomalo": "anomalous unusual",
+    "anomalos": "anomalous unusual",
+    "avance": "progress",
+    "aviso": "alert",
+    "avisos": "alerts",
+    "banco": "bank",
+    "beneficiario": "payee beneficiaries",
+    "beneficiarios": "payees beneficiaries",
+    "cargo": "charge",
+    "cargos": "charges",
+    "categoria": "category",
+    "categorias": "categories",
+    "comercio": "merchant",
+    "comercios": "merchants",
+    "compara": "compare",
+    "comparacion": "comparison",
+    "comparar": "compare",
+    "completare": "completion reached",
+    "compra": "purchase",
+    "compras": "purchases",
+    "corte": "cutoff",
+    "credito": "credit",
+    "cuenta": "account",
+    "cuentas": "accounts",
+    "debo": "owe",
+    "destinatario": "recipient payee",
+    "destinatarios": "recipients payees",
+    "detecta": "detect anomaly",
+    "detectar": "detect anomaly",
+    "deuda": "debt",
+    "deudas": "debts",
+    "dinero": "money",
+    "efectivo": "flow",
+    "egresos": "expenses",
+    "escenario": "scenario",
+    "escenarios": "scenarios",
+    "estimacion": "estimate",
+    "estimada": "estimated",
+    "estimado": "estimated",
+    "estrategia": "strategy",
+    "estrategias": "strategies",
+    "flujo": "cash",
+    "fraude": "fraudulent",
+    "futura": "future",
+    "futuro": "future",
+    "futuros": "future",
+    "gasta": "spent",
+    "gastar": "spend",
+    "gaste": "spent",
+    "gasto": "spending",
+    "gastos": "expenses",
+    "guardado": "saved",
+    "guardados": "saved",
+    "ingreso": "income",
+    "ingresos": "income",
+    "inusual": "unusual anomaly",
+    "inusuales": "unusual anomaly",
+    "limite": "limit",
+    "liquidez": "balance cash",
+    "mensual": "monthly",
+    "mes": "month",
+    "meta": "goal",
+    "metas": "goals",
+    "movimiento": "transaction",
+    "movimientos": "transactions",
+    "pagar": "pay",
+    "pago": "payment",
+    "pagos": "payments",
+    "panorama": "overview",
+    "pendiente": "outstanding",
+    "pendientes": "outstanding",
+    "predecir": "predict",
+    "prediccion": "prediction",
+    "predicciones": "predictions",
+    "presupuesto": "budget",
+    "presupuestos": "budgets",
+    "probabilidad": "probability",
+    "pronostica": "forecast",
+    "pronosticar": "forecast",
+    "pronostico": "forecast",
+    "proximo": "upcoming",
+    "proximos": "upcoming",
+    "proyeccion": "projection projected",
+    "proyecta": "project",
+    "proyectar": "project",
+    "raro": "unusual anomaly",
+    "raros": "unusual anomaly",
+    "reclamacion": "dispute",
+    "recurrente": "recurring repeating",
+    "recurrentes": "recurring repeating",
+    "resumen": "overview",
+    "riesgo": "risk",
+    "saldo": "balance",
+    "saldos": "balances",
+    "salud": "health",
+    "sospechoso": "suspicious anomaly",
+    "sospechosos": "suspicious anomaly",
+    "suscripcion": "subscription",
+    "suscripciones": "subscription",
+    "tarjeta": "card",
+    "tarjetas": "cards",
+    "transferencia": "transfer",
+    "transferencias": "transfers",
+    "transferi": "transfers",
+    "urgente": "urgent",
+    "vencimiento": "due date",
+    "vencimientos": "due dates",
+    "vendran": "upcoming expected",
+    "venir": "upcoming expected",
+}
 
-    Falls back to the original text when a query is nothing but stopwords,
-    which keeps a degenerate query behaving exactly as it does upstream.
+
+def _fold(word: str) -> str:
+    """Casefold and strip accents so "aclaración" and "aclaracion" agree."""
+    stripped = unicodedata.normalize("NFKD", word.strip(".,;:!?¿¡'\"").casefold())
+    return "".join(char for char in stripped if not unicodedata.combining(char))
+
+
+def _domain_terms(query: str) -> str:
+    """Keep the financial vocabulary of a query and express it in English.
+
+    Function words are dropped and Spanish domain words are replaced by the
+    English terms the catalog actually uses. Falls back to the original text
+    when a query is nothing but stopwords, which keeps a degenerate query
+    behaving exactly as it does upstream.
     """
     kept = [
-        word
+        _QUERY_LEXICON.get(folded, word)
         for word in query.split()
-        if word.strip(".,;:!?¿¡'\"").casefold() not in _QUERY_STOPWORDS
+        if (folded := _fold(word)) not in _QUERY_STOPWORDS
     ]
     return " ".join(kept) if kept else query
 

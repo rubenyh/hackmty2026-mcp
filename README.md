@@ -206,7 +206,9 @@ Prediction table usage is fixed: cash balance reads `accounts`, `transactions`, 
 `savings_contributions`, `accounts`, and `transactions`; recurring-charge and anomaly prediction
 each read `accounts` and `transactions`.
 
-Because BM25 ranks on names, descriptions and parameter names, a new domain tool becomes discoverable by describing it well: a bilingual one-line purpose, an explicit boundary against the neighbouring tool, and the vocabulary a user would actually type. Tags are recorded on the component for filtering and are not part of the ranking.
+Because BM25 ranks on names, descriptions and top-level parameter names, a new domain tool becomes discoverable by describing it well: an English one-line purpose, an explicit boundary against the neighbouring tool, and the domain vocabulary the catalog uses. Descriptions and parameter descriptions are English-only; the Spanish a user types is folded onto English terms on the query side by `discovery.py:_QUERY_LEXICON`, so keyword tails in the descriptions are unnecessary and were removed. Nested `$defs` descriptions are not indexed.
+
+Tags are recorded on the component for filtering and operator tooling and are not part of the ranking. Domain tools use exactly `accounts`, `transactions`, `expenses`, `cash-flow`, `budgets`, `savings`, `debts`, `analytics`, `predictive`, `actions`; `predictive` means forward projection and is on `compare_debt_scenarios` only. Plumbing tools use `a2ui`, `actions`, `charts`, `schema`, `infrastructure`.
 
 The twenty financial domain tools return structured failures with `isError: true`.
 Clients receive a stable uppercase error code, the tool and operation, a layer,
@@ -301,6 +303,14 @@ uv run ruff check .
 uv run mypy
 uv run python -c "from supabase_mcp.config import Settings; print('import ok')"
 ```
+
+If a checked-out `.venv` was created before this repository was moved, its editable install still points at the old path and every test module fails to import `supabase_mcp`. Repair it once with `uv sync`, or drive the interpreter directly with the source tree on the path:
+
+```bash
+PYTHONPATH=src ./.venv/bin/python -m pytest
+```
+
+Console scripts inside a relocated venv keep an absolute shebang to the old interpreter, so `.venv/bin/fastmcp` fails with `FileNotFoundError` until the same `uv sync` rewrites it. That alone fails the two `tests/test_server_import.py` cases that shell out to it; every other test passes.
 
 Server configuration always requires a syntactically valid database URL. Startup connects to Supabase when `MCP_ALLOWED_TABLES` is non-empty so every allowlisted object can be validated and reflected.
 

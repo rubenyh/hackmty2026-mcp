@@ -69,6 +69,8 @@ uv run ruff check src/supabase_mcp
 uv run mypy
 ```
 
+A venv created before this repository was moved keeps a stale editable install; run `uv sync` first, or use `PYTHONPATH=src ./.venv/bin/python -m pytest`. See `README.md` § *Validate changes*.
+
 Do not claim tests exist unless a `tests/` tree is present. Checks that start the server need real database configuration; static checks and imports must remain usable without live services.
 
 ## Change discipline

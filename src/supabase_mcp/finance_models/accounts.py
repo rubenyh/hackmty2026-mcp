@@ -12,25 +12,52 @@ from supabase_mcp.finance_models._shared import AccountIds, Pagination, _ScopedR
 
 
 class AccountsRequest(_ScopedRequest):
-    account_ids: AccountIds = Field(default_factory=list)
-    account_type: str | None = Field(default=None, max_length=50)
-    include_cards: bool = True
-    include_credit_terms: bool = True
-    status: str | None = Field(default=None, max_length=50)
+    account_ids: AccountIds = Field(
+        default_factory=list, description="Restrict to these account ids; empty means all accounts."
+    )
+    account_type: str | None = Field(
+        default=None,
+        max_length=50,
+        description="Restrict to one account type, such as checking, savings or credit.",
+    )
+    include_cards: bool = Field(
+        default=True, description="Include masked card metadata for each account."
+    )
+    include_credit_terms: bool = Field(
+        default=True, description="Include current credit-card terms such as limit, cutoff and due."
+    )
+    status: str | None = Field(
+        default=None, max_length=50, description="Restrict to accounts in this status."
+    )
 
 
 class CreditCardsRequest(_ScopedRequest):
     """Filters for the user's credit-card portfolio."""
 
-    account_ids: AccountIds = Field(default_factory=list)
-    status: Literal["active", "blocked", "inactive"] | None = None
+    account_ids: AccountIds = Field(
+        default_factory=list,
+        description="Restrict to cards on these account ids; empty means all credit accounts.",
+    )
+    status: Literal["active", "blocked", "inactive"] | None = Field(
+        default=None, description="Restrict to cards in this status; omit for every credit card."
+    )
 
 
 class BankStatementsRequest(_ScopedRequest, Pagination):
-    account_ids: AccountIds = Field(default_factory=list)
-    period_start: date | None = None
-    period_end: date | None = None
-    document_status: str | None = Field(default=None, max_length=50)
+    account_ids: AccountIds = Field(
+        default_factory=list, description="Restrict to these account ids; empty means all accounts."
+    )
+    period_start: date | None = Field(
+        default=None, description="Keep statements whose period starts on or after this date."
+    )
+    period_end: date | None = Field(
+        default=None, description="Keep statements whose period ends on or before this date."
+    )
+    document_status: str | None = Field(
+        default=None,
+        max_length=50,
+        description="Restrict to statements in this document status, such as available.",
+    )
 
     @model_validator(mode="after")
     def validate_dates(self) -> Self:

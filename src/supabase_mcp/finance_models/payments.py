@@ -17,26 +17,45 @@ class UpcomingPaymentsRequest(_ScopedRequest):
         default=30,
         ge=1,
         le=365,
-        description="Size of the forward window in days / Dias hacia adelante",
+        description="How many days ahead of today the window of due dates reaches.",
     )
-    account_ids: AccountIds = Field(default_factory=list)
-    include_expected_income: bool = False
-    include_drafts: bool = False
+    account_ids: AccountIds = Field(
+        default_factory=list, description="Restrict to these account ids; empty means all accounts."
+    )
+    include_expected_income: bool = Field(
+        default=False, description="Also include expected incoming money, not only charges due."
+    )
+    include_drafts: bool = Field(
+        default=False, description="Also include payment orders still in draft status."
+    )
 
 
 class PaymentActivityRequest(_PeriodRequest, Pagination):
-    account_ids: AccountIds = Field(default_factory=list)
-    kinds: list[str] = Field(default_factory=list, max_length=20)
-    statuses: list[str] = Field(default_factory=list, max_length=20)
+    account_ids: AccountIds = Field(
+        default_factory=list,
+        description="Restrict to money sent from these account ids; empty means all accounts.",
+    )
+    kinds: list[str] = Field(
+        default_factory=list,
+        max_length=20,
+        description="Restrict to these activity kinds, such as transfer or payment_order.",
+    )
+    statuses: list[str] = Field(
+        default_factory=list,
+        max_length=20,
+        description="Restrict to these statuses, such as completed, pending or failed.",
+    )
 
 
 class BeneficiariesRequest(_ScopedRequest, Pagination):
-    status: str | None = Field(default=None, max_length=50)
+    status: str | None = Field(
+        default=None, max_length=50, description="Restrict to beneficiaries in this status."
+    )
     query: str | None = Field(
         default=None,
         min_length=1,
         max_length=100,
-        description="Name or bank fragment to match / Fragmento de nombre o banco",
+        description="Case-insensitive fragment of the saved recipient's display name to match.",
     )
 
 

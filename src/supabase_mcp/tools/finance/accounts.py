@@ -17,37 +17,39 @@ from supabase_mcp.tools.finance._shared import _run
 
 
 async def get_accounts(request: AccountsRequest, ctx: Context) -> ToolResult:
-    """Cuentas, saldos y tarjetas / Accounts, balances and cards.
+    """Read the user's bank accounts with balances, cards and credit terms.
 
-    Account names, available and current balances, masked card metadata and
-    current credit terms. Excludes CLABE and full card numbers. Movements
-    belong to get_transactions, documents to get_bank_statements. Claves:
-    cuenta, cuentas, saldo, saldos, tarjeta, tarjetas, dinero disponible,
-    account, accounts, balance, balances, cards, available money.
+    Returns one row per account: name, type, currency, available and current
+    balance, how much money is available right now, masked card metadata and
+    current credit-card terms. Use it for account and balance questions.
+    Individual movements belong to get_transactions and statement documents to
+    get_bank_statements. CLABE and full card numbers are never returned.
     """
     return await _run("get_accounts", request, ctx, get_accounts_data)
 
 
 async def get_credit_cards(request: CreditCardsRequest, ctx: Context) -> ToolResult:
-    """Tarjetas de crédito del usuario / User credit cards.
+    """List only the user's credit cards with their current payment terms.
 
-    Active, blocked or inactive credit cards with masked last four digits,
-    available credit and current payment terms. Excludes debit cards, full card
-    numbers and unrelated account details. Claves: tarjeta de crédito, mi
-    tarjeta, crédito disponible, pago mínimo, fecha límite, credit card,
-    available credit, minimum payment, due date.
+    Returns one row per credit card: display name, network, masked last four
+    digits, status, expiry, available credit and the card's current terms:
+    limit, outstanding debt, statement balance, minimum payment, interest-free
+    payment, cutoff and due date. Use it when the user asks about a card, what
+    is owed on it, how much is left to spend or when it has to be paid. Debit
+    cards, non-card accounts and full card numbers are never returned;
+    get_accounts covers every account and its balances instead.
     """
     return await _run("get_credit_cards", request, ctx, get_credit_cards_data)
 
 
 async def get_bank_statements(request: BankStatementsRequest, ctx: Context) -> ToolResult:
-    """Estados de cuenta / Bank statement documents.
+    """List the issued bank statement documents of the user's accounts.
 
-    Statement period, opening and closing balance, issue date and availability
-    metadata. Excludes storage paths, CLABE and invented URLs. Current
-    balances belong to get_accounts, movements to get_transactions. Claves:
-    estado de cuenta, estados de cuenta, corte, documento, bank statement,
-    bank statements, statement, statements, monthly statement.
+    Returns one row per monthly statement: statement period, opening and
+    closing balance, issue date and availability, paginated. Use it when the
+    user asks for a statement document or a past monthly cutoff. Today's
+    balances belong to get_accounts and individual movements to
+    get_transactions. Storage paths and download links are never returned.
     """
     return await _run("get_bank_statements", request, ctx, get_bank_statements_data)
 
