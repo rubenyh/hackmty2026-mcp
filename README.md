@@ -39,7 +39,7 @@ Set the database URL and exact object allowlist in `.env`:
 ```env
 SUPABASE_DATABASE_URL=postgresql://mcp_reader:REPLACE_WITH_PASSWORD@db.PROJECT_REF.supabase.co:5432/postgres?sslmode=require
 MCP_ALLOWED_SCHEMAS=public
-MCP_ALLOWED_TABLES=public.users,public.accessibility_preferences,public.accounts,public.transactions,public.subscriptions,public.transfers,public.monthly_cash_flow
+MCP_ALLOWED_TABLES=public.users,public.accessibility_preferences,public.accounts,public.account_details,public.cards,public.credit_card_terms,public.transactions,public.beneficiaries,public.payment_orders,public.budgets,public.savings_goals,public.subscriptions,public.transfers,public.monthly_cash_flow
 ```
 
 For the Supabase session pooler, use its connection parameters. Both `postgresql://` and `postgresql+psycopg://` are accepted. Percent-encode special characters in usernames and passwords.
@@ -72,7 +72,7 @@ per account per month, built on `transactions`) both need to be in `MCP_ALLOWED_
 reachable through the server:
 
 ```env
-MCP_ALLOWED_TABLES=public.users,public.accessibility_preferences,public.accounts,public.transactions,public.subscriptions,public.transfers,public.monthly_cash_flow
+MCP_ALLOWED_TABLES=public.users,public.accessibility_preferences,public.accounts,public.account_details,public.cards,public.credit_card_terms,public.transactions,public.beneficiaries,public.payment_orders,public.budgets,public.savings_goals,public.subscriptions,public.transfers,public.monthly_cash_flow
 ```
 
 All supported settings and defaults are documented in [`.env.example`](.env.example). The service has no `LLM_*`, `OPENAI_*`, or `AGENT_*` settings.
@@ -177,7 +177,7 @@ uv run fastmcp inspect src/supabase_mcp/server.py:mcp
 - `database_overview`: returns a bounded database-object overview with A2UI v0.9.1 presentation metadata, a dynamic data-model update, structured domain data, and a text fallback.
 - `visualize_allowed_data`: reads only selected columns from one reflected allowlisted object and maps them to a bounded area chart (up to 240 rows and four numeric series) or calendar heatmap (up to 500 rows).
 - `present_financial_view`: validates one semantic `BankingView` against the authoritative Finance v2 schema and returns the stable composed financial surface.
-- `a2ui_action`: dispatches the five A2UI action fields through an explicit read-only allowlist, with trusted application scope carried separately. It supports bounded overview refresh and financial-view requests.
+- `a2ui_action`: dispatches the five A2UI action fields through an explicit registry, with trusted application scope carried separately. It supports bounded view requests and the explicitly confirmed financial forms.
 - `a2ui_error`: safely acknowledges client rendering and validation reports without echoing their potentially sensitive message.
 - Fifteen financial domain tools: `get_financial_overview`, `get_accounts`, `get_transactions`, `analyze_spending`, `get_cash_flow`, `get_budget_progress`, `get_savings_progress`, `get_debt_overview`, `get_upcoming_payments`, `get_financial_alerts`, `get_bank_statements`, `get_payment_activity`, `get_beneficiaries`, `get_transaction_disputes`, and `compare_debt_scenarios`. Each takes a scoped typed request and is reached through `search_tools`.
 
@@ -221,7 +221,7 @@ This scope is hackathon-MVP application filtering. It does not add RLS, JWT veri
 
 ### Finance v2 contract
 
-The canonical `BankingView` schema is checked in at `src/supabase_mcp/a2ui_support/catalogs/banking_view.schema.json`. Finance v2 is assembled deterministically from the Finance v1 catalog plus that schema and supports exactly `Text`, `Button`, `Card`, `Column`, `Chart`, and `BankingView`. It keeps A2UI `v0.9.1` and `application/a2ui+json` unchanged. The schema is semantic: it contains the 13 financial intents and their bounded intent-specific data, including the shared empty-state variant, but no arbitrary color, type, spacing, radius, or shadow fields. Card-shaped intents carry a masked `PaymentCard` object (`cards` on `financial-summary`, `card` on `credit-card` and `card-security`) plus the bounded credit terms `creditLimit`, `statementBalance`, `cutoffDate`, `annualInterestRate`, and `catPercentage`; a full card number, CVV or expiry day has no property to travel in.
+The canonical `BankingView` schema is checked in at `src/supabase_mcp/a2ui_support/catalogs/banking_view.schema.json`. Finance v2 is assembled deterministically from the Finance v1 catalog plus that schema and the bounded `TextField`, `DateTimeInput`, and `Slider` form controls. It keeps A2UI `v0.9.1` and `application/a2ui+json` unchanged. The schema is semantic: it contains the 13 financial intents and their bounded intent-specific data, including the shared empty-state variant, but no arbitrary color, type, spacing, radius, or shadow fields. Card-shaped intents carry a masked `PaymentCard` object (`cards` on `financial-summary`, `card` on `credit-card` and `card-security`) plus the bounded credit terms `creditLimit`, `statementBalance`, `cutoffDate`, `annualInterestRate`, and `catPercentage`; a full card number, CVV or expiry day has no property to travel in.
 
 After interpreting MCP data, the Agent constructs Finance v2 messages against this contract. `present_financial_view` is an optional generic validation/resource factory for MCP callers, not the owner of intent selection or data retrieval. Its request fields are `request.view`, `request.actionLabel`, and `request.requestIntent`, and `view` must satisfy the canonical schema. The stable surface is `financial-view`; its flat component array has `root`, `banking_view`, `request_financial_view_label`, and `request_financial_view_button`. The root `Column` references the BankingView and button; the button references the label and emits `request_financial_view` with `context.intent` bound to `/requestIntent`. These IDs and bindings are contract values and must not be generated per response.
 
@@ -285,8 +285,8 @@ Server configuration always requires a syntactically valid database URL. Startup
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for implementation details and [AGENTS.md](AGENTS.md) for repository contribution rules.
 
-## Forms and saving budgets/goals
+## Confirmed financial forms
 
-The mobile repository includes `supabase/migrations/202609130001_a2ui_actions.sql` (run after the financial question-bank schema). Apply it, set a password for the dedicated `fluidbank_actions` PostgreSQL login through your administrator, and configure its TLS connection as `MCP_ACTIONS_DATABASE_URL`. Never substitute postgres or service_role. Keep budgets and savings_goals in MCP_ALLOWED_TABLES and keep the original read connection. Set the same random `MCP_ACTIONS_SECRET` (at least 32 characters) on agent and MCP. The agent signs the complete event plus verified user ID; the MCP verifies the HMAC before any write. This works over the existing Horizon remote transport. Missing or mismatched signatures fail closed. No migration or deployment is performed merely by changing this code.
+The mobile repository includes `supabase/migrations/202609130001_a2ui_actions.sql` and `supabase/migrations/202609130002_transfer_and_card_payment_actions.sql` (run in that order after the financial question-bank schema). Apply them, set a password for the dedicated `fluidbank_actions` PostgreSQL login through your administrator, and configure its TLS connection as `MCP_ACTIONS_DATABASE_URL`. Never substitute postgres or service_role. Keep the tables listed in the mobile action documentation in `MCP_ALLOWED_TABLES` and keep the original read connection. Set the same random `MCP_ACTIONS_SECRET` (at least 32 characters) on agent and MCP. The agent signs the complete event plus verified user ID; the MCP verifies the HMAC before any write. This works over the existing Horizon remote transport. Missing or mismatched signatures fail closed. No migration or deployment is performed merely by changing this code.
 
-`a2ui_form` prepares forms; `a2ui_action` can now save user-confirmed budgets and goals. Missing write configuration returns `writes_not_configured`, with no simulated success. `a2ui_actions/actions.json` declares six actions and each required input. Synchronize copies/templates from the mobile workspace using `node scripts/sync-a2ui-actions.mjs`; CI can use `--check`.
+`a2ui_form` prepares forms; `a2ui_action` can save user-confirmed budgets and goals, execute a transfer to a beneficiary or owned account, and apply a credit-card payment. Money operations update the MVP ledger atomically in `accounts`, `credit_card_terms`, `payment_orders`, and `transactions`. Missing write configuration returns `writes_not_configured`, with no simulated success. `a2ui_actions/actions.json` declares eight actions and each required input. Synchronize copies/templates from the mobile workspace using `node scripts/sync-a2ui-actions.mjs`; CI can use `--check`.

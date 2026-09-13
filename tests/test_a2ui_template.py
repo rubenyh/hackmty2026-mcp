@@ -109,6 +109,9 @@ def test_finance_catalog_and_chart_template_are_valid() -> None:
         "Card",
         "Column",
         "Chart",
+        "TextField",
+        "DateTimeInput",
+        "Slider",
         "BankingView",
     }
     financial_components = SURFACE_REGISTRY.template(FINANCIAL_VIEW_SURFACE)[1]["updateComponents"][

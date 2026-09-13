@@ -34,6 +34,64 @@ class _MappingCatalogProvider(A2uiCatalogProvider):  # type: ignore[misc]
         return deepcopy(self._catalog)
 
 
+def _add_form_components(schema: dict[str, Any]) -> None:
+    """Add the renderer's bounded Basic inputs to the Finance v2 catalog."""
+    components = schema["components"]
+    common = {
+        "$ref": "https://a2ui.org/specification/v0_9/common_types.json#/$defs/ComponentCommon"
+    }
+    catalog_common = {"$ref": "#/$defs/CatalogComponentCommon"}
+
+    def component(properties: dict[str, Any], required: list[str]) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "allOf": [
+                common,
+                catalog_common,
+                {"type": "object", "properties": properties, "required": required},
+            ],
+            "unevaluatedProperties": False,
+        }
+
+    components["TextField"] = component(
+        {
+            "component": {"const": "TextField"},
+            "label": {"$ref": "#/$defs/SafeDynamicString"},
+            "value": {"$ref": "#/$defs/DataBinding"},
+            "variant": {
+                "type": "string",
+                "enum": ["shortText", "longText", "number", "obscured"],
+            },
+        },
+        ["component", "label", "value"],
+    )
+    components["DateTimeInput"] = component(
+        {
+            "component": {"const": "DateTimeInput"},
+            "label": {"$ref": "#/$defs/SafeDynamicString"},
+            "value": {"$ref": "#/$defs/DataBinding"},
+            "enableDate": {"const": True},
+            "enableTime": {"const": False},
+        },
+        ["component", "value", "enableDate"],
+    )
+    components["Slider"] = component(
+        {
+            "component": {"const": "Slider"},
+            "label": {"$ref": "#/$defs/SafeDynamicString"},
+            "value": {"$ref": "#/$defs/DataBinding"},
+            "min": {"type": "number"},
+            "max": {"type": "number"},
+        },
+        ["component", "value", "max"],
+    )
+    refs = schema["$defs"]["anyComponent"]["oneOf"]
+    refs.extend(
+        {"$ref": f"#/components/{name}"}
+        for name in ("TextField", "DateTimeInput", "Slider")
+    )
+
+
 class CatalogRegistry:
     """Load each allowlisted catalog once and cache its official SDK validator."""
 
@@ -79,6 +137,7 @@ class CatalogRegistry:
         schema["catalogId"] = A2UI_FINANCE_V2_CATALOG
         schema["title"] = "Fluidbank Finance Catalog v2"
         schema["description"] = "A bounded A2UI v0.9.1 catalog for semantic financial surfaces."
+        _add_form_components(schema)
         schema["components"]["BankingView"] = {
             "type": "object",
             "allOf": [

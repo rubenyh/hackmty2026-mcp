@@ -124,7 +124,7 @@ for action_name, spec in ACTIONS.items():
     surface = SurfaceSpec(
         surface_id=spec["surfaceId"],
         resource_uri=f"a2ui://actions/{action_name}",
-        catalog_id=A2UI_BASIC_CATALOG,
+        catalog_id=spec.get("catalogId", A2UI_BASIC_CATALOG),
         template_name=f"{spec['surfaceId']}.json",
         title=spec["title"],
         description="Formulario A2UI con inputs y envío explícito.",

@@ -103,6 +103,11 @@ async def get_upcoming_payments_data(
             FilterCondition(
                 column="requested_date", operator=FilterOperator.LTE, value=through.isoformat()
             ),
+            FilterCondition(
+                column="status",
+                operator=FilterOperator.IN,
+                value=["draft", "awaiting_confirmation", "scheduled"],
+            ),
             *_filters_for_accounts("from_account_id", request.account_ids),
         ],
     )
@@ -241,6 +246,8 @@ async def get_payment_activity_data(
             "currency",
             "requested_date",
             "status",
+            "note",
+            "completed_at",
             "created_at",
         ],
         filters=[

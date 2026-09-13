@@ -2,7 +2,7 @@
 
 ## Scope
 
-The repository currently implements a standalone read-only Model Context Protocol server over Supabase PostgreSQL. It exposes a deliberately small, typed query surface to MCP clients and a reusable A2UI v0.9.1 presentation layer for selected results. It does not include an LLM agent, an OpenAI/Gemini integration, a renderer, application authentication, migrations, arbitrary SQL, or database writes.
+The repository implements a Model Context Protocol server over Supabase PostgreSQL. Its main pool exposes a deliberately small, typed, read-only query surface and A2UI v0.9.1 presentation layer. A separate optional `fluidbank_actions` pool can invoke one fixed SQL dispatcher for explicitly confirmed financial actions. The repository does not include an LLM agent, a renderer, application authentication, arbitrary SQL, or general database mutation.
 
 ```text
 MCP client
@@ -113,7 +113,7 @@ Location rule:
 
 `scripts/seed_demo_data.py` is a standalone utility, outside the `supabase_mcp` package, that populates the allowlisted demo tables (`users`, `accessibility_preferences`, `accounts`, `transactions`, `subscriptions`, `transfers`) created by the `create_demo_banking_schema` and `add_transfers_and_cash_flow` migrations, plus the read-only `monthly_cash_flow` view. Every table has row-level security enabled; `mcp_reader` (see below) can only `SELECT`. The script authenticates with the Supabase service-role key, which bypasses RLS, and is idempotent: every row uses a UUID derived deterministically from a stable slug (`uuid5`), so re-running it upserts instead of duplicating. It requires the `seed` extra (`pip install -e ".[seed]"`) and reads `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` from `.env` — neither variable is read by the MCP server itself.
 
-`transfers` represents a simulated (never real) money movement between two accounts belonging to the *same* user. A `before insert or update` trigger (`enforce_transfer_same_user`, fixed `search_path`) rejects any row where the two accounts don't both belong to `transfers.user_id` - cross-user transfers are rejected at the database level, not just by application logic. Every seeded transfer has `status = 'simulated'` and never touches `accounts.available_balance` or writes to `transactions`; a hypothetical resulting balance is something a caller computes from the existing account rows, not something this schema materializes. `completed`/`failed` are reserved statuses for a possible future write-capable tool, which - per `AGENTS.md` - does not exist yet and requires its own authorization model and security review before it's added.
+`transfers` retains the legacy simulated movement between two accounts belonging to the same user. Confirmed A2UI transfers use `payment_orders` instead: the fixed SQL dispatcher validates ownership and balance, updates owned account balances, records debit/credit `transactions` for an internal transfer, and records a debit for a beneficiary transfer. These changes and their idempotency receipt commit atomically through the dedicated action role.
 
 `monthly_cash_flow` answers "income vs. expenses" directly: one row per account per calendar month, summing `transactions.amount` by `direction` (`credit` = income, `debit` = expenses) plus a `net` column. It's created `WITH (security_invoker = true)` so it inherits the querying role's RLS instead of the view owner's privileges, and `mcp_reader` has an explicit `GRANT SELECT` on it (views need that in addition to RLS).
 
@@ -225,7 +225,7 @@ server applies it to `health_check`, `list_allowed_tables`, `describe_table`,
 `select_rows`, `present_financial_view`, `chat_message`, `a2ui_action`,
 `a2ui_error` and `a2ui_form`. Those nine were never offered to a model, so
 discovery must not become the thing that offers them: a generic row reader — or
-a tool that writes budgets and goals — appearing in search results is a wider
+a tool that applies confirmed financial actions — appearing in search results is a wider
 boundary, not a narrower context.
 
 Ranking quality is a property of the descriptions. BM25 indexes tool names,
@@ -350,7 +350,7 @@ The safety model is layered:
 - Read-only transactions, timeouts, pooling bounds, and row limits constrain execution.
 - Structured results and sanitized errors constrain the MCP boundary.
 
-Explicit non-goals are writes, arbitrary SQL, schema mutation, authentication, multi-tenancy, LLM orchestration, prompt handling, server-side UI rendering, unregistered catalogs, background jobs, application-data caching, and production exposure of the unauthenticated HTTP listener.
+Explicit non-goals are arbitrary SQL, caller-selected writes, general schema mutation, authentication, multi-tenancy, LLM orchestration, prompt handling, server-side UI rendering, unregistered catalogs, background jobs, application-data caching, and production exposure of the unauthenticated HTTP listener. The fixed, signed actions described below are the only write boundary.
 
 ## Operational checks
 
@@ -391,10 +391,10 @@ Update this file whenever source code, configuration, dependencies, public tool 
 
 ## A2UI forms and explicitly confirmed writes
 
-`a2ui_actions/inputs.json` describes the Expo input subset; `actions.json` owns the input types, counts, context fields and submit labels for budget and savings-goal create/update/load. `tools/action_forms.py` prepares six Basic v0.9.1 surfaces using native TextField, DateTimeInput (date only), Slider and Button. The agent can prepare forms, but the model never receives the `a2ui_action` write tool. Only an explicit client submit routes there under the authenticated Supabase subject. A load action reads an owned record by exact name and fills its update form; duplicate names are rejected.
+`a2ui_actions/inputs.json` describes the Expo input subset; `actions.json` owns the input types, counts, context fields and submit labels for budget and savings-goal create/update/load, transfer execution and credit-card payment. `tools/action_forms.py` prepares eight v0.9.1 surfaces using TextField, DateTimeInput (date only), Slider and Button. The payment form uses Finance v2 and binds a validated `BankingView` so Expo shows the masked `PaymentCard` and current credit terms before confirmation. The agent can prepare forms, but the model never receives the `a2ui_action` write tool. Only an explicit client submit routes there under the authenticated Supabase subject. A load action reads an owned record by exact name and fills its update form; duplicate names are rejected.
 
 Writes are the product-authorized exception to the original read-only scope. `DatabaseClient.apply_financial_action` is the only new database boundary. It uses optional `MCP_ACTIONS_DATABASE_URL`, a separate `fluidbank_actions` role and fixed `apply_a2ui_action` SQL. The original read pool, exact allowlists, read-only transactions and TLS requirements remain. Write configuration rejects privileged roles and requires `MCP_ACTIONS_SECRET` (at least 32 characters), shared only by the agent and MCP. The agent signs the complete A2UI event plus its verified user ID with HMAC-SHA256, overwriting any supplied proof. MCP verifies this signature before dispatching writes. Horizon authentication remains in place for remote access; the action proof independently prevents forged trustedScope from authorizing writes. Never give either service secret to Expo or the LLM. Replayed exact events remain idempotent through database receipts.
 
-The review/confirmation UI is the visible populated form and its explicit Crear/Guardar cambios button. No LLM call writes data. Context validation, exact action/surface/component allowlists, owner predicates and RLS reject other users' rows. Only budgets and savings_goals may be inserted/updated; no transfers, payments, balances, deletion, arbitrary SQL or executable JSON. The separate SQL migration adds a receipt keyed by user and event identity: the same event is idempotent, concurrent retries serialize, mismatched payloads conflict, and receipt plus mutation commit atomically. Network failures are reported as unconfirmed, not successful. New events after restarting the app are new operations; receipts do not deduplicate independently created forms.
+The review/confirmation UI is the visible populated form and its explicit confirmation button. No LLM call writes data. Context validation, exact action/surface/component allowlists, owner predicates and RLS reject other users' rows. The dispatcher can insert or update budgets and savings goals, transfer to one owned account or beneficiary, and pay one owned active credit card. It cannot delete rows or accept SQL or executable JSON. The SQL migrations add a receipt keyed by user and event identity: the same event is idempotent, concurrent retries serialize, mismatched payloads conflict, and receipt plus mutation commit atomically. Network failures are reported as unconfirmed, not successful. New events after restarting the app are new operations; receipts do not deduplicate independently created forms.
 
 `data.actionResult` is an application transport result (success/failure, safe message, optional code), not a new A2UI protocol message. The Expo UI renders it and retains the form on failure. `a2ui://actions/inputs`, `a2ui://actions/registry` and each action template are discoverable MCP resources. `a2ui_form` only prepares forms. Forms use explicit event.context; sendDataModel stays false to avoid sending unrelated surface data.

@@ -92,6 +92,33 @@ class GoalUpdate(GoalContext):
     id: UUID
 
 
+class TransferContext(StrictModel):
+    source_account: str = Field(min_length=1, max_length=120)
+    recipient: str = Field(min_length=1, max_length=120)
+    amount: Amount = Field(gt=0, le=100_000)
+    concept: str = Field(min_length=1, max_length=140)
+
+    @field_validator("source_account", "recipient", "concept")
+    @classmethod
+    def nonblank_text(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Completa este campo.")
+        return value.strip()
+
+
+class CreditCardPaymentContext(StrictModel):
+    source_account: str = Field(min_length=1, max_length=120)
+    card: str = Field(min_length=1, max_length=120)
+    amount: Amount = Field(gt=0, le=100_000)
+
+    @field_validator("source_account", "card")
+    @classmethod
+    def nonblank_text(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Completa este campo.")
+        return value.strip()
+
+
 CONTEXTS: dict[str, type[BaseModel]] = {
     "budget.create": BudgetContext,
     "budget.update": BudgetUpdate,
@@ -99,4 +126,6 @@ CONTEXTS: dict[str, type[BaseModel]] = {
     "savings_goal.update": GoalUpdate,
     "budget.load": NamedContext,
     "savings_goal.load": NamedContext,
+    "transfer.execute": TransferContext,
+    "credit_card.pay": CreditCardPaymentContext,
 }
