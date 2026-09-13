@@ -95,11 +95,23 @@ class Settings(BaseSettings):
     def validate_actions_url(cls, value: SecretStr | None) -> SecretStr | None:
         if value is None:
             return None
-        cls.validate_database_url(value)
-        if make_url(value.get_secret_value()).username not in {"fluidbank_actions"}:
-            raise ValueError("MCP_ACTIONS_DATABASE_URL requires the fluidbank_actions role")
-        return value
 
+        cls.validate_database_url(value)
+
+        url = make_url(value.get_secret_value())
+        username = url.username or ""
+
+        # Supports:
+        #   fluidbank_actions
+        #   fluidbank_actions.<supabase-project-ref>
+        role = username.split(".", maxsplit=1)[0]
+
+        if role != "fluidbank_actions":
+            raise ValueError(
+                "MCP_ACTIONS_DATABASE_URL requires the fluidbank_actions role"
+            )
+
+        return value
     @field_validator("timezone")
     @classmethod
     def validate_timezone(cls, value: str) -> str:
