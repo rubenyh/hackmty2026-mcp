@@ -9,10 +9,12 @@ from supabase_mcp.tools.finance._shared import _run
 
 
 async def get_savings_progress(request: SavingsProgressRequest, ctx: Context) -> ToolResult:
-    """Avance de metas de ahorro / Savings-goal progress.
+    """Avance de metas de ahorro / Savings goal progress.
 
-    Use for target, saved, remaining, percentage, target date, suggested
-    contribution, and optional contributions. Úsala para metas de ahorro.
+    Target amount, amount saved, remaining, percentage, target date, suggested
+    contribution and optional contribution history per goal. Claves: ahorro,
+    ahorros, ahorrar, meta, metas, meta de ahorro, savings, saving, savings
+    goal, savings goals, goal progress, target amount.
     """
     return await _run("get_savings_progress", request, ctx, get_savings_progress_data)
 

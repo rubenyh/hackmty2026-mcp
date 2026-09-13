@@ -11,8 +11,11 @@ from supabase_mcp.tools.finance._shared import _run
 async def get_budget_progress(request: BudgetProgressRequest, ctx: Context) -> ToolResult:
     """Avance de presupuestos / Budget progress.
 
-    Returns the view's limit, spent, remaining, percentage, dates, and status.
-    Devuelve el progreso ya calculado; no recalcula movimientos.
+    Limit, amount spent, remaining amount, percentage used, period dates and
+    status per budget, already calculated by the database. Reports budgets and
+    never re-derives spending. Claves: presupuesto, presupuestos, presupuesto
+    mensual, limite, cuanto queda, budget, budgets, budget progress, over
+    budget, budget limit, remaining budget.
     """
     return await _run("get_budget_progress", request, ctx, get_budget_progress_data)
 

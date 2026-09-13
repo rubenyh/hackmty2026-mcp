@@ -108,7 +108,12 @@ def _overview_tool_result(overview: DatabaseOverview) -> ToolResult:
 async def database_overview(
     ctx: Context, limit: OverviewLimit = DATABASE_OVERVIEW_DEFAULT_LIMIT
 ) -> ToolResult:
-    """Show a bounded A2UI overview of the allowlisted database tables and views."""
+    """Catalogo tecnico del esquema / Technical catalogue of the allowlisted schema.
+
+    Reflected PostgreSQL tables and views rendered as an A2UI surface, for
+    developer diagnostics. Schema metadata only: never balances, amounts, rows
+    or customer records, and never an answer about personal finances.
+    """
     try:
         return _overview_tool_result(get_database_overview(_database(ctx), limit))
     except Exception as exc:
@@ -130,7 +135,12 @@ async def visualize_allowed_data(
     request: VisualizeAllowedDataRequest,
     ctx: Context,
 ) -> ToolResult:
-    """Visualize selected columns from one reflected allowlisted table or view."""
+    """Grafica A2UI de area o mapa de calor / A2UI area or heatmap chart.
+
+    Numeric columns of one allowlisted table or view rendered as a chart.
+    Plots an already chosen source: it interprets no finances, picks no period
+    and decides no category. Charting step, never a retrieval step.
+    """
     try:
         result = await get_data_chart(_database(ctx), request)
         return _chart_factory.build(

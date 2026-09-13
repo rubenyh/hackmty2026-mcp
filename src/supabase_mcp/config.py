@@ -107,11 +107,10 @@ class Settings(BaseSettings):
         role = username.split(".", maxsplit=1)[0]
 
         if role != "fluidbank_actions":
-            raise ValueError(
-                "MCP_ACTIONS_DATABASE_URL requires the fluidbank_actions role"
-            )
+            raise ValueError("MCP_ACTIONS_DATABASE_URL requires the fluidbank_actions role")
 
         return value
+
     @field_validator("timezone")
     @classmethod
     def validate_timezone(cls, value: str) -> str:

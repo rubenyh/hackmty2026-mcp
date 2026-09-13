@@ -30,6 +30,11 @@ from supabase_mcp.a2ui_support.surfaces import (
 )
 from supabase_mcp.config import Settings
 from supabase_mcp.database import DatabaseClient
+from supabase_mcp.discovery import (
+    DiscoveryLoggingMiddleware,
+    app_only,
+    build_tool_search_transform,
+)
 from supabase_mcp.tools import (
     FINANCIAL_TOOLS,
     a2ui_action,
@@ -74,7 +79,12 @@ async def app_lifespan(_server: FastMCP[Any]) -> AsyncIterator[dict[str, Any]]:
 
 
 mcp = FastMCP("Supabase Read-Only", lifespan=app_lifespan)
-mcp.tool(a2ui_form, annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False))
+mcp.tool(
+    a2ui_form,
+    tags={"a2ui", "actions"},
+    meta=app_only(),
+    annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False),
+)
 
 
 def action_resource_reader(surface: SurfaceSpec) -> Callable[[], str]:
@@ -101,13 +111,40 @@ def action_contract_resource() -> str:
 mcp.resource("a2ui://actions/inputs", mime_type="application/json")(input_contract_resource)
 mcp.resource("a2ui://actions/registry", mime_type="application/json")(action_contract_resource)
 mcp.add_middleware(FinancialValidationMiddleware(FINANCIAL_REQUEST_MODELS))
-mcp.tool(health_check)
-mcp.tool(list_allowed_tables)
-mcp.tool(describe_table)
-mcp.tool(select_rows)
+#: Domain tags per financial tool. FastMCP stores them on the component for
+#: filtering and operator tooling; BM25 indexes names, descriptions and
+#: parameters, so retrieval quality lives in the docstrings, not here.
+FINANCIAL_TOOL_TAGS: dict[str, set[str]] = {
+    "get_financial_overview": {"finance", "accounts", "budgets", "savings", "debts"},
+    "get_accounts": {"finance", "accounts", "credit"},
+    "get_transactions": {"finance", "transactions", "expenses"},
+    "analyze_spending": {"finance", "expenses", "transactions"},
+    "get_cash_flow": {"finance", "cash-flow"},
+    "get_budget_progress": {"finance", "budgets", "expenses"},
+    "get_savings_progress": {"finance", "savings"},
+    "get_debt_overview": {"finance", "debts", "credit"},
+    "get_upcoming_payments": {"finance", "cash-flow", "debts"},
+    "get_financial_alerts": {"finance", "budgets", "accounts"},
+    "get_bank_statements": {"finance", "accounts"},
+    "get_payment_activity": {"finance", "transactions", "accounts"},
+    "get_beneficiaries": {"finance", "accounts"},
+    "get_transaction_disputes": {"finance", "transactions", "credit"},
+    "compare_debt_scenarios": {"finance", "debts", "credit"},
+}
+
+# Infrastructure and generic schema primitives. They stay registered and stay
+# callable by the trusted orchestrator, but they are declared host/app-only so
+# tool search and the `call_tool` proxy never hand them to a model: readiness
+# checks and a generic row reader are not banking capabilities, and letting
+# discovery surface them would widen model reach rather than narrow context.
+mcp.tool(health_check, tags={"infrastructure"}, meta=app_only())
+mcp.tool(list_allowed_tables, tags={"schema"}, meta=app_only())
+mcp.tool(describe_table, tags={"schema"}, meta=app_only())
+mcp.tool(select_rows, tags={"schema"}, meta=app_only())
 for financial_tool in FINANCIAL_TOOLS:
     mcp.tool(
         financial_tool,
+        tags=FINANCIAL_TOOL_TAGS[financial_tool.__name__],
         annotations=ToolAnnotations(
             title=f"{financial_tool.__name__.replace('_', ' ').title()} / Herramienta financiera",
             read_only_hint=True,
@@ -118,6 +155,7 @@ for financial_tool in FINANCIAL_TOOLS:
     )
 mcp.tool(
     database_overview,
+    tags={"schema", "a2ui"},
     meta=ui_metadata(DATABASE_OVERVIEW_SURFACE),
     annotations=ToolAnnotations(
         title="Database overview",
@@ -129,6 +167,7 @@ mcp.tool(
 )
 mcp.tool(
     visualize_allowed_data,
+    tags={"a2ui", "charts", "finance"},
     meta=ui_metadata(DATA_CHART_SURFACE),
     annotations=ToolAnnotations(
         title="Visualize allowed data",
@@ -140,7 +179,8 @@ mcp.tool(
 )
 mcp.tool(
     present_financial_view,
-    meta=ui_metadata(FINANCIAL_VIEW_SURFACE),
+    tags={"a2ui"},
+    meta=app_only(ui_metadata(FINANCIAL_VIEW_SURFACE)),
     annotations=ToolAnnotations(
         title="Present financial view",
         read_only_hint=True,
@@ -151,7 +191,8 @@ mcp.tool(
 )
 mcp.tool(
     chat_message,
-    meta=ui_metadata(CHAT_MESSAGE_SURFACE),
+    tags={"a2ui"},
+    meta=app_only(ui_metadata(CHAT_MESSAGE_SURFACE)),
     annotations=ToolAnnotations(
         title="Present chat message",
         read_only_hint=True,
@@ -162,6 +203,8 @@ mcp.tool(
 )
 mcp.tool(
     a2ui_action,
+    tags={"a2ui", "actions"},
+    meta=app_only(),
     annotations=ToolAnnotations(
         title="Handle user-confirmed A2UI action",
         read_only_hint=False,
@@ -172,6 +215,8 @@ mcp.tool(
 )
 mcp.tool(
     a2ui_error,
+    tags={"a2ui", "actions"},
+    meta=app_only(),
     annotations=ToolAnnotations(
         title="Report A2UI client error",
         read_only_hint=True,
@@ -208,6 +253,13 @@ mcp.resource(
     description=FINANCIAL_VIEW_SURFACE.description,
     mime_type=A2UI_MIME_TYPE,
 )(financial_view_resource)
+
+
+# Progressive discovery is installed last so it transforms the complete
+# catalog: `tools/list` collapses to `search_tools` + `call_tool`, while every
+# tool above stays registered, individually specialized and callable.
+mcp.add_middleware(DiscoveryLoggingMiddleware())
+mcp.add_transform(build_tool_search_transform())
 
 
 def main() -> None:

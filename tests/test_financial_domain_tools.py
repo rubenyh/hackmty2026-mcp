@@ -56,22 +56,27 @@ FINANCIAL_NAMES = {
     "get_transaction_disputes",
     "compare_debt_scenarios",
 }
+# Baseline regenerated for progressive tool discovery: every financial
+# description was rewritten for BM25 retrieval and mutual disambiguation, and
+# ambiguous parameters gained Field descriptions. Names, request shapes and
+# structured results are unchanged — only the discovery text moved, which is
+# exactly what this guard is meant to make visible rather than silent.
 FINANCIAL_CONTRACT_HASHES = {
-    "analyze_spending": "779367d2aa22dfd0b558a76a397f81c7af3fce80380a9b0558313a797921669d",
-    "compare_debt_scenarios": "05f3f2f9cd3373959b783320fb2d290b4418f90d086fa22dc7c12eda62dc560d",
-    "get_accounts": "93d62c0d63124056cabcb985bee5143e701730177728f21bd37729ea1980b144",
-    "get_bank_statements": "6b854309531c998e8c82be9b109032daa1613c97112133fd98dc6234ba9d8ae8",
-    "get_beneficiaries": "1a4a3b28804e5f4d0f5c3943713b1fa65836544a22ff191c717ed8b510c80a22",
-    "get_budget_progress": "b2d84a559c88283f706348a4092caea755c7d34d20d29ef65ecbbc8146d0d5ec",
-    "get_cash_flow": "f417e417b3ca47ea4a319453f2ea982b2e5557003766ea6907bee4ef521458ad",
-    "get_debt_overview": "d1048d8366a34f57b3548c760a13b95bbe46a85d9d58ad5228308eb8d4ed9644",
-    "get_financial_alerts": "30f130ed906b039036d8fe539d4c3d363eb9ec34f13f898b4afe9d2e04c9c64c",
-    "get_financial_overview": "77a35cd2ccd0f1ad0a673fb06ccdf8d2c32999403d6607bfbda0ce5ada5a669f",
-    "get_payment_activity": "b3a3bbe525c06ba36b60fb10aa7f494e9cd678ae02b1d142535e22c85aca2c4e",
-    "get_savings_progress": "546915ad46e8273642b1164a40a287721a4bcae02462be988f2aae3674a7f836",
-    "get_transaction_disputes": "bb8706218e625b2418dcb16850a906b537c9878bbcc7ef0902261cf62e0d4c01",
-    "get_transactions": "9b4d27b0b5d4df3db81d519045f4f523514eb9f2385a7685092f1eb7a23a924c",
-    "get_upcoming_payments": "619144bd1b4b3dd25a7a5c6264cc729162051369d66902fa0304dd0f96395054",
+    "analyze_spending": "1831adbc017e558d61a5c9b9df3f6e01bd1545b7b8c23b460379c83206809eeb",
+    "compare_debt_scenarios": "14fd880407b9457be41e7d4ff5ae504c5b5bac967e4c35b18874469f364ae27a",
+    "get_accounts": "ce178365d0c716666cb03d9d530e9f062019e540a96a3c3a38e855c6dcf2982d",
+    "get_bank_statements": "ac188c111c49e85b0098267058ee4a3184dec52684d5f1b15ced999d985dbfd1",
+    "get_beneficiaries": "fea659d07a9c068f6d85dd35ae94787e59516313649b28799a87abc51dc67521",
+    "get_budget_progress": "348f61f4d69e0aabcfb121e5e28267976fd4185a8deaf53eb20b018884d06a1f",
+    "get_cash_flow": "71d506b99fc8373d29e27ea4e4e0a8e6a84ca5bfc484a8ea19d08281d7d45c30",
+    "get_debt_overview": "7d56a6d907f71b91e6322f9ea37d4fdce00c80b372adad9d0f441c85379af3a9",
+    "get_financial_alerts": "1753d53775caba85da553b6765aa2cd9adee12d9569860c67553d670bf68d72b",
+    "get_financial_overview": "2799811cd8f34c513b4c46125fc77c97dc8779ec6d9bedd9fde6f9995bae0150",
+    "get_payment_activity": "bb459709075efe608d599aa55f181097eb22a571be8a324868cabb27a8243f34",
+    "get_savings_progress": "4282c2ec1080fad55b0422bf4177b94ad8ee4e08ad93da63b0c73a396e92208a",
+    "get_transaction_disputes": "6865aa35136892ba7554f8f0263393766f2c90d3574a77b774566b7d47fc51fd",
+    "get_transactions": "c232bd780f38780d4568bf51bbca7970f9f52202ad9b643568198c0ea12876cc",
+    "get_upcoming_payments": "f3a8cac17d944eef1e24a87ed6a496615f0196e89cd46fd3d87124cac42d6fc5",
 }
 
 DOMAIN_SYMBOLS = {
@@ -139,9 +144,13 @@ async def test_all_fifteen_tools_are_registered_with_bilingual_discovery_text(
         "postgresql://reader:password@localhost/postgres?sslmode=require",
     )
     monkeypatch.setenv("MCP_ALLOWED_TABLES", "")
-    async with Client(mcp) as client:
-        listed_tools = await client.list_tools()
+    # Progressive discovery replaces `tools/list` with the search pair, so the
+    # contract these tools must satisfy is checked on the registered catalog —
+    # the definitions `search_tools` actually hands back.
+    listed_tools = [tool.to_mcp_tool() for tool in await mcp._list_tools()]
     listed = {tool.name: tool for tool in listed_tools}
+    async with Client(mcp) as client:
+        assert {tool.name for tool in await client.list_tools()} == {"search_tools", "call_tool"}
     assert {tool.__name__ for tool in FINANCIAL_TOOLS} == FINANCIAL_NAMES
     assert FINANCIAL_NAMES <= listed.keys()
     assert len(FINANCIAL_TOOLS) == len(FINANCIAL_NAMES)
@@ -149,8 +158,12 @@ async def test_all_fifteen_tools_are_registered_with_bilingual_discovery_text(
     for name in FINANCIAL_NAMES:
         description = listed[name].description or ""
         assert "/" in description
-        assert "request" in listed[name].input_schema["properties"]
-        request_schema = listed[name].input_schema["properties"]["request"]
+        schema = listed[name].input_schema
+        assert "request" in schema["properties"]
+        request_schema = schema["properties"]["request"]
+        reference = request_schema.get("$ref")
+        if reference is not None:
+            request_schema = schema["$defs"][reference.rsplit("/", 1)[-1]]
         assert "scope" in request_schema["properties"]
         assert listed[name].annotations is not None
         assert listed[name].annotations.read_only_hint is True
@@ -165,8 +178,7 @@ async def test_financial_tool_public_contracts_match_the_refactor_baseline(
         "postgresql://reader:password@localhost/postgres?sslmode=require",
     )
     monkeypatch.setenv("MCP_ALLOWED_TABLES", "")
-    async with Client(mcp) as client:
-        listed = {tool.name: tool for tool in await client.list_tools()}
+    listed = {tool.name: tool.to_mcp_tool() for tool in await mcp._list_tools()}
     actual = {}
     for name in FINANCIAL_NAMES:
         tool = listed[name]

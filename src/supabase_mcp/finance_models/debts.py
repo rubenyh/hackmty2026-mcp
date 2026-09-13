@@ -19,10 +19,11 @@ class DebtOverviewRequest(_ScopedRequest):
 
 
 class CompareDebtScenariosRequest(_ScopedRequest):
-    debt_id: UUID
+    debt_id: UUID = Field(description="Debt to compare, as returned by get_debt_overview")
     scenario_ids: ResourceIds = Field(default_factory=list)
-    order_by: Literal["lowest_total_interest", "lowest_monthly_payment", "fastest_payoff"] = (
-        "lowest_total_interest"
+    order_by: Literal["lowest_total_interest", "lowest_monthly_payment", "fastest_payoff"] = Field(
+        default="lowest_total_interest",
+        description="Ranking criterion for the saved scenarios / Criterio de orden",
     )
 
 
