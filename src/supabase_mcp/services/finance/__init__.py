@@ -29,9 +29,11 @@ from supabase_mcp.services.finance.payments import (
     get_payment_activity_data,
     get_upcoming_payments_data,
 )
+from supabase_mcp.services.finance.predictions import PredictionService
 from supabase_mcp.services.finance.savings import get_savings_progress_data
 
 __all__ = [
+    "PredictionService",
     "analyze_spending_data",
     "compare_debt_scenarios_data",
     "get_accounts_data",

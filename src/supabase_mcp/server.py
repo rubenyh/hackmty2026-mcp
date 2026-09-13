@@ -35,6 +35,8 @@ from supabase_mcp.discovery import (
     app_only,
     build_tool_search_transform,
 )
+from supabase_mcp.inference import InferenceClient
+from supabase_mcp.services.finance.predictions import PredictionService
 from supabase_mcp.tools import (
     FINANCIAL_TOOLS,
     a2ui_action,
@@ -64,16 +66,25 @@ def load_settings() -> Settings:
 
 @lifespan
 async def app_lifespan(_server: FastMCP[Any]) -> AsyncIterator[dict[str, Any]]:
-    """Create and dispose the one shared database client for this server process."""
+    """Create and dispose the process-scoped database and inference clients."""
     settings = load_settings()
     logging.basicConfig(
         level=getattr(logging, settings.log_level),
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
     database = DatabaseClient(settings)
+    inference = InferenceClient(settings)
     await database.start()
     try:
-        yield {"database": database}
+        await inference.start()
+        try:
+            yield {
+                "database": database,
+                "inference": inference,
+                "predictions": PredictionService(database, inference),
+            }
+        finally:
+            await inference.stop()
     finally:
         await database.stop()
 
@@ -130,6 +141,10 @@ FINANCIAL_TOOL_TAGS: dict[str, set[str]] = {
     "get_beneficiaries": {"finance", "accounts"},
     "get_transaction_disputes": {"finance", "transactions", "credit"},
     "compare_debt_scenarios": {"finance", "debts", "credit"},
+    "forecast_cash_balance": {"finance", "predictions", "cash-flow", "liquidity"},
+    "predict_savings_goal": {"finance", "predictions", "savings"},
+    "forecast_recurring_charges": {"finance", "predictions", "transactions"},
+    "detect_transaction_anomalies": {"finance", "predictions", "transactions", "security"},
 }
 
 # Infrastructure and generic schema primitives. They stay registered and stay

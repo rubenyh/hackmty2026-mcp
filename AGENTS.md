@@ -4,13 +4,16 @@
 
 This repository currently contains one Python package: `supabase_mcp`, a standalone read-only FastMCP server for a tightly allowlisted subset of Supabase PostgreSQL. There is no application agent, LLM provider integration, frontend, migration suite, or write API in the current tree.
 
-The dependency path is:
+The read and prediction dependency paths are:
 
 ```text
 MCP client -> FastMCP server -> typed tool handler -> DatabaseClient -> Supabase PostgreSQL
+MCP client -> prediction tool -> PredictionService -> DatabaseClient + InferenceClient -> Models API
 ```
 
 Keep MCP protocol and lifecycle code in `server.py`, database access in `database.py`, environment validation in `config.py`, wire contracts in `models.py`, value conversion in `serialization.py`, and narrow handlers under `tools/`.
+Keep prediction request/response contracts in `finance_models/predictions.py`, owned-record
+assembly in `services/finance/predictions.py`, and models-service HTTP behavior in `inference.py`.
 
 ## Security invariants
 
@@ -43,6 +46,10 @@ The server recognizes only:
 - `MCP_DEFAULT_LIMIT`
 - `MCP_MAX_LIMIT`
 - `MCP_STATEMENT_TIMEOUT_MS`
+- `INFERENCE_API_URL`
+- `INFERENCE_API_KEY`
+- `INFERENCE_HTTP_TIMEOUT_SECONDS`
+- `INFERENCE_CONNECT_TIMEOUT_SECONDS`
 - `MCP_TRANSPORT`
 - `MCP_HOST`
 - `MCP_PORT`

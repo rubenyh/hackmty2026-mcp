@@ -27,6 +27,12 @@ from supabase_mcp.finance_models.payments import (
     PaymentActivityRequest,
     UpcomingPaymentsRequest,
 )
+from supabase_mcp.finance_models.predictions import (
+    DetectTransactionAnomaliesRequest,
+    ForecastCashBalanceRequest,
+    ForecastRecurringChargesRequest,
+    PredictSavingsGoalRequest,
+)
 from supabase_mcp.finance_models.savings import SavingsProgressRequest
 
 __all__ = [
@@ -40,11 +46,15 @@ __all__ = [
     "CurrencyTotal",
     "DataQuality",
     "DebtOverviewRequest",
+    "DetectTransactionAnomaliesRequest",
     "FinancialAlertsRequest",
     "FinancialOverviewRequest",
+    "ForecastCashBalanceRequest",
+    "ForecastRecurringChargesRequest",
     "MoneyAmount",
     "Pagination",
     "PaymentActivityRequest",
+    "PredictSavingsGoalRequest",
     "ResolvedDateRange",
     "SavingsProgressRequest",
     "SpendingAnalysisRequest",

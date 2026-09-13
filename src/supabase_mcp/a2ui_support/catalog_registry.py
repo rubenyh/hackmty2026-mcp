@@ -87,8 +87,7 @@ def _add_form_components(schema: dict[str, Any]) -> None:
     )
     refs = schema["$defs"]["anyComponent"]["oneOf"]
     refs.extend(
-        {"$ref": f"#/components/{name}"}
-        for name in ("TextField", "DateTimeInput", "Slider")
+        {"$ref": f"#/components/{name}"} for name in ("TextField", "DateTimeInput", "Slider")
     )
 
 

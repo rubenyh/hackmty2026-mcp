@@ -1,4 +1,4 @@
-"""Offline contract tests for the fifteen financial domain tools."""
+"""Offline contract tests for the nineteen financial domain tools."""
 
 from __future__ import annotations
 
@@ -55,6 +55,10 @@ FINANCIAL_NAMES = {
     "get_beneficiaries",
     "get_transaction_disputes",
     "compare_debt_scenarios",
+    "detect_transaction_anomalies",
+    "forecast_cash_balance",
+    "forecast_recurring_charges",
+    "predict_savings_goal",
 }
 # Baseline regenerated for progressive tool discovery: every financial
 # description was rewritten for BM25 retrieval and mutual disambiguation, and
@@ -64,6 +68,13 @@ FINANCIAL_NAMES = {
 FINANCIAL_CONTRACT_HASHES = {
     "analyze_spending": "1831adbc017e558d61a5c9b9df3f6e01bd1545b7b8c23b460379c83206809eeb",
     "compare_debt_scenarios": "14fd880407b9457be41e7d4ff5ae504c5b5bac967e4c35b18874469f364ae27a",
+    "detect_transaction_anomalies": (
+        "7ea9b304892e09539d62c307c9d90f7b1e3657b43a9d882c824760d64db200a8"
+    ),
+    "forecast_cash_balance": "0198db0bda9157dd09622f80018f641db5da358a057686490fdee3b89da3c2f9",
+    "forecast_recurring_charges": (
+        "bfd1e2ba041ef75f125968ca65e7ac5470f0f40d60923f0155c212483bc60632"
+    ),
     "get_accounts": "ce178365d0c716666cb03d9d530e9f062019e540a96a3c3a38e855c6dcf2982d",
     "get_bank_statements": "ac188c111c49e85b0098267058ee4a3184dec52684d5f1b15ced999d985dbfd1",
     "get_beneficiaries": "fea659d07a9c068f6d85dd35ae94787e59516313649b28799a87abc51dc67521",
@@ -74,9 +85,10 @@ FINANCIAL_CONTRACT_HASHES = {
     "get_financial_overview": "2799811cd8f34c513b4c46125fc77c97dc8779ec6d9bedd9fde6f9995bae0150",
     "get_payment_activity": "bb459709075efe608d599aa55f181097eb22a571be8a324868cabb27a8243f34",
     "get_savings_progress": "4282c2ec1080fad55b0422bf4177b94ad8ee4e08ad93da63b0c73a396e92208a",
-    "get_transaction_disputes": "6865aa35136892ba7554f8f0263393766f2c90d3574a77b774566b7d47fc51fd",
+    "get_transaction_disputes": "767a52ca9ee5257b7ec0769bedac64987896eaf0df6f224bc89a4895ad568a70",
     "get_transactions": "c232bd780f38780d4568bf51bbca7970f9f52202ad9b643568198c0ea12876cc",
     "get_upcoming_payments": "f3a8cac17d944eef1e24a87ed6a496615f0196e89cd46fd3d87124cac42d6fc5",
+    "predict_savings_goal": "1f4cfeb9ec3c77819bf3ac5be1093ee14e77c419974a78fe657d67a56fbd4c43",
 }
 
 DOMAIN_SYMBOLS = {
@@ -127,6 +139,21 @@ DOMAIN_SYMBOLS = {
         ),
         "tools": ("get_beneficiaries", "get_payment_activity", "get_upcoming_payments"),
     },
+    "predictions": {
+        "models": (
+            "DetectTransactionAnomaliesRequest",
+            "ForecastCashBalanceRequest",
+            "ForecastRecurringChargesRequest",
+            "PredictSavingsGoalRequest",
+        ),
+        "services": ("PredictionService",),
+        "tools": (
+            "detect_transaction_anomalies",
+            "forecast_cash_balance",
+            "forecast_recurring_charges",
+            "predict_savings_goal",
+        ),
+    },
     "savings": {
         "models": ("SavingsProgressRequest",),
         "services": ("get_savings_progress_data",),
@@ -136,7 +163,7 @@ DOMAIN_SYMBOLS = {
 
 
 @pytest.mark.asyncio
-async def test_all_fifteen_tools_are_registered_with_bilingual_discovery_text(
+async def test_all_nineteen_tools_are_registered_with_bilingual_discovery_text(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv(

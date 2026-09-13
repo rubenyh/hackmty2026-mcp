@@ -106,8 +106,7 @@ async def _prepare_transfer(
         if target:
             form["recipient"] = str(target["display_name"])
     source_text = ", ".join(
-        f"{_account_label(row)} ({float(row['available_balance']):,.2f} MXN)"
-        for row in sources
+        f"{_account_label(row)} ({float(row['available_balance']):,.2f} MXN)" for row in sources
     )
     recipient_text = ", ".join(
         f"{row['display_name']} · {row['bank_name']} · •••• {row['last_four']}"
@@ -251,8 +250,7 @@ async def _prepare_credit_card_payment(
     if term.get("cat_percentage") is not None:
         preview["catPercentage"] = float(term["cat_percentage"])
     source_text = ", ".join(
-        f"{_account_label(row)} ({float(row['available_balance']):,.2f} MXN)"
-        for row in sources
+        f"{_account_label(row)} ({float(row['available_balance']):,.2f} MXN)" for row in sources
     )
     card_text = ", ".join(
         f"{row['display_name']} · •••• {row['last_four']}" for row in eligible_cards

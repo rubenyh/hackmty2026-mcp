@@ -46,7 +46,7 @@ async def get_transaction_disputes(request: TransactionDisputesRequest, ctx: Con
     transaction. Identifiers are validated against the authenticated user.
     Claves: aclaracion, aclaraciones, cargo no reconocido, reclamacion,
     fraude, dispute, disputes, disputed charge, unrecognized charge,
-    chargeback, fraud.
+    recognize, I don't recognize this charge, chargeback, fraud.
     """
     return await _run("get_transaction_disputes", request, ctx, get_transaction_disputes_data)
 

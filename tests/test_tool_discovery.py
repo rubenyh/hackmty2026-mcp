@@ -50,6 +50,10 @@ FINANCIAL_TOOLS = {
     "get_beneficiaries",
     "get_transaction_disputes",
     "compare_debt_scenarios",
+    "forecast_cash_balance",
+    "predict_savings_goal",
+    "forecast_recurring_charges",
+    "detect_transaction_anomalies",
 }
 
 #: One realistic user intent per financial capability, in both product
@@ -78,6 +82,14 @@ DISCOVERY_INTENTS = [
     ("transfers I made last month", "get_payment_activity"),
     ("any alerts I should know about", "get_financial_alerts"),
     ("how are my finances overall", "get_financial_overview"),
+    ("forecast my future cash balance", "forecast_cash_balance"),
+    ("pronostica mi saldo y liquidez futura", "forecast_cash_balance"),
+    ("will I complete my savings goal on time", "predict_savings_goal"),
+    ("cuando completare mi meta de ahorro", "predict_savings_goal"),
+    ("predict my recurring subscription charges", "forecast_recurring_charges"),
+    ("que cargos recurrentes vienen", "forecast_recurring_charges"),
+    ("detect unusual transactions", "detect_transaction_anomalies"),
+    ("encuentra movimientos anomalos", "detect_transaction_anomalies"),
 ]
 
 

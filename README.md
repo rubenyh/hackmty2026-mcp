@@ -1,6 +1,6 @@
 # Supabase Read-Only MCP Server
 
-A small FastMCP service that exposes an explicitly allowlisted subset of Supabase PostgreSQL through read-only tools. It supports stdio for local MCP clients and Streamable HTTP for separately managed clients. Selected results can also be presented as declarative [A2UI](https://a2ui.org/) interfaces.
+A small FastMCP service that exposes an explicitly allowlisted subset of Supabase PostgreSQL through read-only tools. It can assemble owned financial records and call the sibling stateless Models API for predictions. It supports stdio for local MCP clients and Streamable HTTP for separately managed clients. Selected results can also be presented as declarative [A2UI](https://a2ui.org/) interfaces.
 
 This repository currently contains the MCP server only. It does not contain an LLM agent, chat UI, application API, migrations, or write tools.
 
@@ -39,7 +39,7 @@ Set the database URL and exact object allowlist in `.env`:
 ```env
 SUPABASE_DATABASE_URL=postgresql://mcp_reader:REPLACE_WITH_PASSWORD@db.PROJECT_REF.supabase.co:5432/postgres?sslmode=require
 MCP_ALLOWED_SCHEMAS=public
-MCP_ALLOWED_TABLES=public.users,public.accessibility_preferences,public.accounts,public.account_details,public.cards,public.credit_card_terms,public.transactions,public.beneficiaries,public.payment_orders,public.budgets,public.savings_goals,public.subscriptions,public.transfers,public.monthly_cash_flow
+MCP_ALLOWED_TABLES=public.users,public.accessibility_preferences,public.accounts,public.account_details,public.cards,public.credit_card_terms,public.transactions,public.beneficiaries,public.payment_orders,public.budgets,public.savings_goals,public.savings_contributions,public.scheduled_cash_flows,public.subscriptions,public.transfers,public.monthly_cash_flow
 ```
 
 For the Supabase session pooler, use its connection parameters. Both `postgresql://` and `postgresql+psycopg://` are accepted. Percent-encode special characters in usernames and passwords.
@@ -72,7 +72,18 @@ per account per month, built on `transactions`) both need to be in `MCP_ALLOWED_
 reachable through the server:
 
 ```env
-MCP_ALLOWED_TABLES=public.users,public.accessibility_preferences,public.accounts,public.account_details,public.cards,public.credit_card_terms,public.transactions,public.beneficiaries,public.payment_orders,public.budgets,public.savings_goals,public.subscriptions,public.transfers,public.monthly_cash_flow
+MCP_ALLOWED_TABLES=public.users,public.accessibility_preferences,public.accounts,public.account_details,public.cards,public.credit_card_terms,public.transactions,public.beneficiaries,public.payment_orders,public.budgets,public.savings_goals,public.savings_contributions,public.scheduled_cash_flows,public.subscriptions,public.transfers,public.monthly_cash_flow
+```
+
+To enable the four prediction tools, configure the stateless Models API and its shared
+server-side bearer credential. Both values must be present together; neither is sent to the model
+or the mobile client:
+
+```env
+INFERENCE_API_URL=http://127.0.0.1:8001
+INFERENCE_API_KEY=REPLACE_WITH_THE_SAME_SERVER_ONLY_KEY_AS_MODELS
+INFERENCE_HTTP_TIMEOUT_SECONDS=30
+INFERENCE_CONNECT_TIMEOUT_SECONDS=5
 ```
 
 All supported settings and defaults are documented in [`.env.example`](.env.example). The service has no `LLM_*`, `OPENAI_*`, or `AGENT_*` settings.
@@ -120,7 +131,8 @@ Configure runtime values in Horizon's environment/secrets UI, never in a committ
 - **Required secret:** `SUPABASE_DATABASE_URL`, using a dedicated read-only PostgreSQL role and TLS.
 - **Required for data exposure:** `MCP_ALLOWED_TABLES`, containing the exact qualified tables/views. Empty or omitted remains deny-all.
 - **Recommended explicit setting:** `MCP_ALLOWED_SCHEMAS` (defaults to `public`).
-- **Optional controls:** `MCP_DEFAULT_LIMIT`, `MCP_MAX_LIMIT`, `MCP_STATEMENT_TIMEOUT_MS`, and `LOG_LEVEL`.
+- **Prediction settings:** `INFERENCE_API_URL` and secret `INFERENCE_API_KEY`, configured together when prediction tools are enabled.
+- **Optional controls:** `MCP_DEFAULT_LIMIT`, `MCP_MAX_LIMIT`, `MCP_STATEMENT_TIMEOUT_MS`, `INFERENCE_HTTP_TIMEOUT_SECONDS`, `INFERENCE_CONNECT_TIMEOUT_SECONDS`, and `LOG_LEVEL`.
 
 `MCP_TRANSPORT`, `MCP_HOST`, and `MCP_PORT` are only used by direct execution through `main()`; Horizon owns its hosted transport when it imports `mcp`.
 
@@ -139,7 +151,7 @@ Importing or inspecting the object does not load `Settings`, start a transport, 
 
 `tools/list` does not carry the domain catalog. FastMCP's `BM25SearchTransform`
 replaces it with two synthetic tools, so an LLM receives two schemas instead of
-twenty-six:
+thirty:
 
 ```text
 search_tools(query)          natural-language search over the catalog
@@ -179,11 +191,25 @@ uv run fastmcp inspect src/supabase_mcp/server.py:mcp
 - `present_financial_view`: validates one semantic `BankingView` against the authoritative Finance v2 schema and returns the stable composed financial surface.
 - `a2ui_action`: dispatches the five A2UI action fields through an explicit registry, with trusted application scope carried separately. It supports bounded view requests and the explicitly confirmed financial forms.
 - `a2ui_error`: safely acknowledges client rendering and validation reports without echoing their potentially sensitive message.
-- Fifteen financial domain tools: `get_financial_overview`, `get_accounts`, `get_transactions`, `analyze_spending`, `get_cash_flow`, `get_budget_progress`, `get_savings_progress`, `get_debt_overview`, `get_upcoming_payments`, `get_financial_alerts`, `get_bank_statements`, `get_payment_activity`, `get_beneficiaries`, `get_transaction_disputes`, and `compare_debt_scenarios`. Each takes a scoped typed request and is reached through `search_tools`.
+- Nineteen financial domain tools: the existing account, transaction, cash-flow, budget, savings, debt, payment, and alert reads plus `forecast_cash_balance`, `predict_savings_goal`, `forecast_recurring_charges`, and `detect_transaction_anomalies`. Each takes a scoped typed request and is reached through `search_tools`.
+
+The prediction tools accept only semantic scope and identifiers plus a bounded horizon or candidate
+period. MCP fetches owned rows itself; callers cannot submit transaction or contribution arrays.
+The Models API receives a server-generated UUID `request_id`, UTC `as_of`, currency and normalized
+domain records only—never `user_id`, Supabase tokens, email or profile data. Amounts are normalized
+to positive magnitudes while direction preserves the contract (`credit`/`income` positive,
+`debit`/`expense` negative). Histories use the most recent 500 records per collection at most,
+further bounded by `MCP_MAX_LIMIT`, then are sorted chronologically before inference; no arbitrary
+date window is imposed.
+
+Prediction table usage is fixed: cash balance reads `accounts`, `transactions`, and
+`scheduled_cash_flows`; savings-goal prediction reads `savings_goals`,
+`savings_contributions`, `accounts`, and `transactions`; recurring-charge and anomaly prediction
+each read `accounts` and `transactions`.
 
 Because BM25 ranks on names, descriptions and parameter names, a new domain tool becomes discoverable by describing it well: a bilingual one-line purpose, an explicit boundary against the neighbouring tool, and the vocabulary a user would actually type. Tags are recorded on the component for filtering and are not part of the ranking.
 
-The fifteen financial domain tools return structured failures with `isError: true`.
+The nineteen financial domain tools return structured failures with `isError: true`.
 Clients receive a stable uppercase error code, the tool and operation, a layer,
 retryability, a safe suggestion, and a correlation ID. Database failures distinguish
 unavailability, timeout, permission, query, and data-mapping problems. Public errors
@@ -191,6 +217,12 @@ never include SQL, driver messages, connection strings, tokens, or tracebacks; u
 the correlation ID to find the corresponding redacted server log entry. Invalid
 financial request envelopes, custom date ranges, and cursors use the same transport
 shape instead of FastMCP's generic validation text.
+
+Prediction failures additionally distinguish missing configuration, timeout/network or model
+unavailability, 401/403 service authentication, 409 model-version mismatch, 422 request-contract
+mismatch, and malformed responses. They never fall back to fabricated predictions. Logs contain
+only bounded operation metadata and redacted exception details, not the inference key or financial
+request body.
 
 `select_rows` and `visualize_allowed_data` require `scope: {"user_id": "<seeded-demo-uuid>"}`. The scope is separate from caller-selected filters and is always combined with them using `AND`. `users`, `accessibility_preferences`, `accounts`, `subscriptions`, and `transfers` use direct ownership; `transactions` and `monthly_cash_flow` use an `EXISTS` relationship through `accounts`. Unknown demo users and allowlisted objects without a configured ownership rule fail closed. Ownership columns cannot be supplied as ordinary filters, and chart mappings cannot use them as visual data.
 

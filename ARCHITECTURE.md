@@ -2,7 +2,7 @@
 
 ## Scope
 
-The repository implements a Model Context Protocol server over Supabase PostgreSQL. Its main pool exposes a deliberately small, typed, read-only query surface and A2UI v0.9.1 presentation layer. A separate optional `fluidbank_actions` pool can invoke one fixed SQL dispatcher for explicitly confirmed financial actions. The repository does not include an LLM agent, a renderer, application authentication, arbitrary SQL, or general database mutation.
+The repository implements a Model Context Protocol server over Supabase PostgreSQL. Its main pool exposes a deliberately small, typed, read-only query surface and A2UI v0.9.1 presentation layer. It also assembles owned records for four stateless financial predictions and calls the sibling Models API through one shared HTTP client. A separate optional `fluidbank_actions` pool can invoke one fixed SQL dispatcher for explicitly confirmed financial actions. The repository does not include an LLM agent, a renderer, application authentication, arbitrary SQL, or general database mutation.
 
 ```text
 MCP client
@@ -25,6 +25,12 @@ MCP client
 DatabaseClient
     -> SQLAlchemy async engine / Psycopg
     -> Supabase PostgreSQL
+
+prediction tool
+    -> PredictionService
+         -> DatabaseClient (ownership-scoped source records)
+         -> InferenceClient (normalized identity-free request)
+    -> Models FastAPI
 ```
 
 The server supports stdio and Streamable HTTP. Stdio is the default and is suitable for a client-managed local subprocess. HTTP listens on loopback by default and is not production-secure by itself.
@@ -39,13 +45,14 @@ src/
     database.py       Engine lifecycle, reflection, query construction, and execution
     discovery.py      BM25 tool-search transform, app-only visibility, discovery logging
     errors.py         Internal safe error types
+    inference.py      Shared typed httpx client and sanitized inference failures
     models.py         Strict generic tool inputs and structured results
-    finance_models/   Strict financial contracts grouped by domain
+    finance_models/   Strict financial and inference contracts grouped by domain
     serialization.py  PostgreSQL-to-JSON-safe conversion
     server.py         Event-loop setup, FastMCP lifespan, registration, and entry point
     services/
       database_overview.py  Bounded presentation-independent overview use case
-      finance/        Financial rules and coordinated reads grouped by domain
+      finance/        Financial rules, coordinated reads, and prediction assembly
     a2ui_support/
       constants.py    v0.9.1, MIME, catalog, action, and stable URI identifiers
       models.py       Immutable SurfaceSpec
@@ -97,6 +104,7 @@ bases and value objects live in `finance_models/_shared.py`.
 | Debts | `tools/finance/debts.py` | `services/finance/debts.py` | `finance_models/debts.py` | Debt/card overview and saved scenario comparison |
 | Payments | `tools/finance/payments.py` | `services/finance/payments.py` | `finance_models/payments.py` | Upcoming obligations, payment activity, and beneficiaries |
 | Financial health | `tools/finance/financial_health.py` | `services/finance/financial_health.py` | `finance_models/financial_health.py` | Cross-domain overview and financial alerts |
+| Predictions | `tools/finance/predictions.py` | `services/finance/predictions.py` | `finance_models/predictions.py` | Semantic prediction inputs, owned-record normalization, and typed inference responses |
 
 Location rule:
 
@@ -129,6 +137,8 @@ The `mcp_reader` Postgres role is a dedicated, `SELECT`-only login created direc
 - PostgreSQL-like identifiers and unique normalized `(schema, object)` pairs;
 - positive default and maximum row limits, with a maximum cap of 10,000;
 - a statement timeout from 100 through 60,000 milliseconds;
+- optional paired `INFERENCE_API_URL` and secret `INFERENCE_API_KEY` settings;
+- total inference timeout from over 0 through 120 seconds and connect timeout from over 0 through 30 seconds, with connect not exceeding total;
 - `stdio` or `http` transport, a non-empty host, a valid TCP port, and an enumerated log level.
 
 Unqualified allowlist entries are accepted only when exactly one schema is configured. `sqlalchemy_url()` normalizes accepted URLs to the async Psycopg dialect and adds `sslmode=require` when absent. The unmasked URL is used only to construct the engine and must never be logged.
@@ -137,7 +147,7 @@ Unqualified allowlist entries are accepted only when exactly one schema is confi
 
 `supabase_mcp.server` selects `WindowsSelectorEventLoopPolicy` on Windows before importing FastMCP or database modules. This ordering is required by Psycopg's async implementation.
 
-FastMCP's lifespan creates one shared `DatabaseClient`, starts it before serving requests, makes it available through the tool context, and disposes it during shutdown. The module preserves the four original tools (`health_check`, `list_allowed_tables`, `describe_table`, and `select_rows`) and adds `database_overview`, `visualize_allowed_data`, `present_financial_view`, `chat_message`, `a2ui_action`, and `a2ui_error`. It publishes the corresponding A2UI presentation templates as read-only resources.
+FastMCP's lifespan creates one shared `DatabaseClient` and one shared `InferenceClient`, starts them before serving requests, makes a process-scoped `PredictionService` available through the tool context, and disposes both clients during shutdown. Missing inference configuration does not disable unrelated database tools; a prediction call returns a typed configuration error. The module preserves the four original tools (`health_check`, `list_allowed_tables`, `describe_table`, and `select_rows`) and registers the A2UI and financial domain tools. It publishes the corresponding A2UI presentation templates as read-only resources.
 
 `main()` selects stdio unless `MCP_TRANSPORT=http`. HTTP uses the configured host and port; FastMCP exposes its MCP endpoint at `/mcp`. The service itself adds no authentication, authorization middleware, reverse-proxy TLS, rate limiting, or tenant isolation.
 
@@ -179,7 +189,7 @@ The effective limit is the request limit or `MCP_DEFAULT_LIMIT` and cannot excee
 
 ## Progressive tool discovery
 
-Twenty-six tools are registered, fifteen of them financial, and that catalog is
+Thirty tools are registered, nineteen of them financial, and that catalog is
 expected to keep growing. Sending every schema on every request wastes context,
 slows the turn, and degrades selection, so `supabase_mcp.discovery` installs
 FastMCP's native `BM25SearchTransform` as the last transform on the server.
@@ -265,13 +275,15 @@ Known request failures use stable public codes such as `object_not_allowed`, `co
 
 Visualization query failures raised by the database driver use the actionable, sanitized `database_error` result rather than falling through to a generic server failure. Protocol responses never include driver text, SQL statements, connection details, or stack traces.
 
-The fifteen financial tools share a stricter execution boundary. Every controlled
+The nineteen financial tools share a stricter execution boundary. Every controlled
 failure is a `ToolResult` with `isError: true`; its fallback text is the same
 sanitized JSON object exposed in `structuredContent`. The stable codes are
 `VALIDATION_ERROR`, `INVALID_DATE_RANGE`, `INVALID_CURSOR`, `USER_SCOPE_ERROR`,
 `NOT_FOUND`, `DATABASE_UNAVAILABLE`, `DATABASE_TIMEOUT`,
 `DATABASE_PERMISSION_ERROR`, `DATABASE_QUERY_ERROR`, `DATA_MAPPING_ERROR`, and
-`INTERNAL_ERROR`. Each error also names the tool and internal operation, identifies
+`INTERNAL_ERROR`. Prediction-specific codes distinguish missing configuration,
+timeout, network/model unavailability, 401/403 authentication, 409 version mismatch,
+422 contract mismatch, and malformed/unexpected responses. Each error also names the tool and internal operation, identifies
 the failing layer, marks retryability, offers a bounded suggestion, and carries a
 correlation ID. A FastMCP middleware validates only the registered financial
 request envelopes before dispatch so argument failures retain this structure and
@@ -291,6 +303,37 @@ optional period to `created_at` and do not issue an unfiltered transaction looku
 when the dispute page is empty.
 
 Serialization preserves primitive JSON values, stringifies UUIDs and decimals, emits ISO-8601 date/time strings, converts enums through their values, Base64-encodes bytes, and recursively handles mappings and sequences. Unknown values fall back to strings.
+
+## Prediction boundary
+
+The four model-facing capabilities are `forecast_cash_balance`, `predict_savings_goal`,
+`forecast_recurring_charges`, and `detect_transaction_anomalies`. Their public request models
+contain trusted `scope`, one account or goal UUID, and only the applicable horizon/candidate
+period. Raw transactions, scheduled flows, and contributions are not accepted from the LLM.
+
+`PredictionService` obtains account currency/balance and related rows through the same
+`DatabaseClient.select_domain_rows` and ownership helpers used by the existing finance services.
+Cash balance reads `accounts`, `transactions`, and `scheduled_cash_flows`; savings-goal prediction
+reads `savings_goals`, `savings_contributions`, `accounts`, and `transactions`; recurring charges
+and anomalies read `accounts` and `transactions`. Exact account and goal lookups fail closed when
+the scoped row is absent. Every database request retains the canonical `UserScope`, including
+relationship filters.
+
+The assembler converts stored amounts to finite positive magnitudes and keeps the authoritative
+direction so the Models API derives `credit`/`income` as positive and `debit`/`expense` as negative.
+It generates a UUID correlation ID and aware UTC `as_of` for every inference request, excludes
+identity and session fields by construction, sorts all histories chronologically, and limits each
+history collection to the most recent 500 rows (or the lower configured `MCP_MAX_LIMIT`). This is
+the centralized bounded default because the Models contract defines a 10,000-record maximum but
+no history window; no additional date window is invented. Scheduled flows are limited to the
+selected cash forecast horizon, and anomaly candidates are the requested last 1–90 days.
+
+`InferenceClient` owns one `httpx.AsyncClient` for the process, sends only
+`Authorization: Bearer <INFERENCE_API_KEY>` to the configured base URL, and validates each response
+against a model-specific strict Pydantic contract plus matching `request_id`. It never receives the
+user's Supabase bearer token. Error handling does not parse or expose remote error bodies and never
+falls back to locally fabricated predictions. A successful tool returns the complete structured
+model response; presentation remains the Agent/A2UI responsibility.
 
 ## A2UI presentation boundary
 
@@ -368,6 +411,8 @@ uv run python -c "from supabase_mcp.config import Settings; print('import ok')"
 The offline tests use FastMCP's in-memory client and an empty deny-all allowlist, so they exercise real `resources/list`, `resources/read`, `tools/list`, and `tools/call` serialization without Supabase credentials. They also build a wheel and verify the packaged JSON template. A server startup check with a non-empty allowlist remains a live integration check because configured objects are validated against PostgreSQL.
 
 ## Decisions
+
+- **2026-09-13:** Added four prediction tools backed by an ownership-scoped `PredictionService` and one lifespan-managed typed `InferenceClient`; public inputs remain semantic, requests are identity-free and chronologically normalized, and BM25 discovery advertises each predictive intent separately.
 
 - **2026-09-12:** Split the fifteen financial tools, services, and request models into eight cohesive domain modules, retained the three former import paths as explicit compatibility facades, and kept one explicit duplicate-checked registration tuple.
 - **2026-09-09:** Created a constrained read-only FastMCP/Supabase service.

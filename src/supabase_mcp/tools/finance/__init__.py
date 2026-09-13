@@ -10,9 +10,13 @@ from supabase_mcp.finance_models import (
     CashFlowRequest,
     CompareDebtScenariosRequest,
     DebtOverviewRequest,
+    DetectTransactionAnomaliesRequest,
     FinancialAlertsRequest,
     FinancialOverviewRequest,
+    ForecastCashBalanceRequest,
+    ForecastRecurringChargesRequest,
     PaymentActivityRequest,
+    PredictSavingsGoalRequest,
     SavingsProgressRequest,
     SpendingAnalysisRequest,
     TransactionDisputesRequest,
@@ -37,6 +41,12 @@ from supabase_mcp.tools.finance.payments import (
     get_payment_activity,
     get_upcoming_payments,
 )
+from supabase_mcp.tools.finance.predictions import (
+    detect_transaction_anomalies,
+    forecast_cash_balance,
+    forecast_recurring_charges,
+    predict_savings_goal,
+)
 from supabase_mcp.tools.finance.savings import get_savings_progress
 
 FINANCIAL_TOOLS = (
@@ -55,6 +65,10 @@ FINANCIAL_TOOLS = (
     get_beneficiaries,
     get_transaction_disputes,
     compare_debt_scenarios,
+    forecast_cash_balance,
+    predict_savings_goal,
+    forecast_recurring_charges,
+    detect_transaction_anomalies,
 )
 
 FINANCIAL_REQUEST_MODELS: dict[str, type[BaseModel]] = {
@@ -73,6 +87,10 @@ FINANCIAL_REQUEST_MODELS: dict[str, type[BaseModel]] = {
     "get_beneficiaries": BeneficiariesRequest,
     "get_transaction_disputes": TransactionDisputesRequest,
     "compare_debt_scenarios": CompareDebtScenariosRequest,
+    "forecast_cash_balance": ForecastCashBalanceRequest,
+    "predict_savings_goal": PredictSavingsGoalRequest,
+    "forecast_recurring_charges": ForecastRecurringChargesRequest,
+    "detect_transaction_anomalies": DetectTransactionAnomaliesRequest,
 }
 
 __all__ = [
@@ -80,6 +98,9 @@ __all__ = [
     "FINANCIAL_TOOLS",
     "analyze_spending",
     "compare_debt_scenarios",
+    "detect_transaction_anomalies",
+    "forecast_cash_balance",
+    "forecast_recurring_charges",
     "get_accounts",
     "get_bank_statements",
     "get_beneficiaries",
@@ -93,4 +114,5 @@ __all__ = [
     "get_transaction_disputes",
     "get_transactions",
     "get_upcoming_payments",
+    "predict_savings_goal",
 ]
