@@ -48,10 +48,9 @@ from supabase_mcp.tools import (
     database_overview_resource,
     describe_table,
     financial_view_resource,
-    health_check,
+    get_user_context,
     list_allowed_tables,
     present_financial_view,
-    select_rows,
     visualize_allowed_data,
 )
 from supabase_mcp.tools.action_forms import a2ui_form
@@ -148,15 +147,12 @@ FINANCIAL_TOOL_TAGS: dict[str, set[str]] = {
     "detect_transaction_anomalies": {"finance", "predictions", "transactions", "security"},
 }
 
-# Infrastructure and generic schema primitives. They stay registered and stay
+# Infrastructure and schema primitives. They stay registered and stay
 # callable by the trusted orchestrator, but they are declared host/app-only so
-# tool search and the `call_tool` proxy never hand them to a model: readiness
-# checks and a generic row reader are not banking capabilities, and letting
-# discovery surface them would widen model reach rather than narrow context.
-mcp.tool(health_check, tags={"infrastructure"}, meta=app_only())
+# tool search and the `call_tool` proxy never hand them to a model.
+mcp.tool(get_user_context, tags={"application", "context"}, meta=app_only())
 mcp.tool(list_allowed_tables, tags={"schema"}, meta=app_only())
 mcp.tool(describe_table, tags={"schema"}, meta=app_only())
-mcp.tool(select_rows, tags={"schema"}, meta=app_only())
 for financial_tool in FINANCIAL_TOOLS:
     mcp.tool(
         financial_tool,
@@ -272,8 +268,8 @@ mcp.resource(
 
 
 # Progressive discovery is installed last so it transforms the complete
-# catalog: `tools/list` collapses to `search_tools` + `call_tool`, while every
-# tool above stays registered, individually specialized and callable.
+# catalog: the model-facing list collapses to `search_tools` + `call_tool`, while
+# app-only host handlers remain pinned and every domain tool stays registered.
 mcp.add_middleware(DiscoveryLoggingMiddleware())
 mcp.add_transform(build_tool_search_transform())
 

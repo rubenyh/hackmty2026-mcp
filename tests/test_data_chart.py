@@ -40,7 +40,7 @@ class FakeDatabase:
         del schema, table
         return frozenset()
 
-    async def select_rows(self, request: Any) -> tuple[list[dict[str, Any]], int, bool]:
+    async def select_scoped_rows(self, request: Any) -> tuple[list[dict[str, Any]], int, bool]:
         self.request = request
         return self.rows, request.limit, len(self.rows) > request.limit
 
@@ -161,7 +161,7 @@ async def test_area_and_heatmap_rows_are_isolated_by_scope(
             del schema, table
             return frozenset({"account_id"})
 
-        async def select_rows(self, request: Any) -> tuple[list[dict[str, Any]], int, bool]:
+        async def select_scoped_rows(self, request: Any) -> tuple[list[dict[str, Any]], int, bool]:
             self.request = request
             owned_rows = [row for row in self.rows if row["owner"] == str(request.scope.user_id)]
             self.selected_transactions = [str(row["transaction"]) for row in owned_rows]

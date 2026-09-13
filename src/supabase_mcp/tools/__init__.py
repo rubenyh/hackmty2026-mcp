@@ -35,9 +35,8 @@ from supabase_mcp.tools.finance import (
     get_upcoming_payments,
     predict_savings_goal,
 )
-from supabase_mcp.tools.health import health_check
 from supabase_mcp.tools.schema import describe_table, list_allowed_tables
-from supabase_mcp.tools.select import select_rows
+from supabase_mcp.tools.user_context import get_user_context
 
 __all__ = [
     "FINANCIAL_TOOLS",
@@ -69,10 +68,9 @@ __all__ = [
     "get_transaction_disputes",
     "get_transactions",
     "get_upcoming_payments",
-    "health_check",
+    "get_user_context",
     "list_allowed_tables",
     "predict_savings_goal",
     "present_financial_view",
-    "select_rows",
     "visualize_allowed_data",
 ]

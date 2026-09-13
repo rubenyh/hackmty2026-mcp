@@ -163,15 +163,15 @@ advertisement changed. A client discovers a capability with `search_tools`,
 which returns complete, self-contained tool definitions ranked by relevance,
 then executes it with `call_tool`.
 
-`tools/list` also carries `select_rows`, `a2ui_action` and `a2ui_form`. They are
+`tools/list` also carries `get_user_context`, `a2ui_action` and `a2ui_form`. They are
 pinned so a *host* can address them by name — a hosted deployment proxies this
 server and resolves `tools/call` against the advertised catalog, so an
 unadvertised tool is not callable at all. All three are still declared app-only,
 so tool search and `call_tool` refuse them and no model can reach them.
 
 Search returns at most five tools. Infrastructure, presentation and
-confirmed-action tools (`health_check`, `list_allowed_tables`, `describe_table`,
-`select_rows`, `present_financial_view`, `chat_message`, `a2ui_action`,
+confirmed-action tools (`get_user_context`, `list_allowed_tables`, `describe_table`,
+`present_financial_view`, `chat_message`, `a2ui_action`,
 `a2ui_error`, `a2ui_form`) declare `_meta.ui.visibility = ["app"]`, so neither
 search nor `call_tool` exposes them to a model. A trusted orchestrator still
 calls them directly by name, which is how the form-and-confirm write flow works.
@@ -182,10 +182,9 @@ uv run fastmcp inspect src/supabase_mcp/server.py:mcp
 
 ## Tools
 
-- `health_check`: runs a sanitized `SELECT 1` readiness check.
+- `get_user_context`: app-only fixed context read for the authenticated orchestrator; callers cannot choose tables, columns, filters, or SQL.
 - `list_allowed_tables`: lists configured objects that were successfully reflected at startup.
 - `describe_table`: returns cached column metadata for one allowlisted table or view.
-- `select_rows`: reads selected columns with a mandatory typed demo-user scope plus typed filters, ordering, limit, and offset.
 - `database_overview`: returns a bounded database-object overview with A2UI v0.9.1 presentation metadata, a dynamic data-model update, structured domain data, and a text fallback.
 - `visualize_allowed_data`: reads only selected columns from one reflected allowlisted object and maps them to a bounded area chart (up to 240 rows and four numeric series) or calendar heatmap (up to 500 rows).
 - `present_financial_view`: validates one semantic `BankingView` against the authoritative Finance v2 schema and returns the stable composed financial surface.
@@ -224,9 +223,7 @@ mismatch, and malformed responses. They never fall back to fabricated prediction
 only bounded operation metadata and redacted exception details, not the inference key or financial
 request body.
 
-`select_rows` and `visualize_allowed_data` require `scope: {"user_id": "<seeded-demo-uuid>"}`. The scope is separate from caller-selected filters and is always combined with them using `AND`. `users`, `accessibility_preferences`, `accounts`, `subscriptions`, and `transfers` use direct ownership; `transactions` and `monthly_cash_flow` use an `EXISTS` relationship through `accounts`. Unknown demo users and allowlisted objects without a configured ownership rule fail closed. Ownership columns cannot be supplied as ordinary filters, and chart mappings cannot use them as visual data.
-
-`select_rows` supports `eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `in`, `like`, `ilike`, and `is_null`. Filter values are JSON scalars; `in` accepts a non-empty list of at most 100 scalars. The response includes `row_count`, the effective `limit`, `offset`, and a `truncated` flag. If no ordering is supplied, tables with primary keys are ordered by those keys.
+`get_user_context` and `visualize_allowed_data` require `scope: {"user_id": "<seeded-demo-uuid>"}`. The context tool owns its fixed table set; it accepts no caller-selected source, columns, filters, ordering, or pagination. Visualization scope is separate from caller-selected filters and is always combined with them using `AND`. Unknown demo users and allowlisted objects without a configured ownership rule fail closed. Ownership columns cannot be supplied as ordinary filters, and chart mappings cannot use them as visual data.
 
 ## A2UI v0.9.1 over MCP
 
@@ -305,7 +302,7 @@ uv run mypy
 uv run python -c "from supabase_mcp.config import Settings; print('import ok')"
 ```
 
-Server configuration always requires a syntactically valid database URL. Startup connects to Supabase when `MCP_ALLOWED_TABLES` is non-empty so every allowlisted object can be validated and reflected; `health_check` also performs a live database round trip.
+Server configuration always requires a syntactically valid database URL. Startup connects to Supabase when `MCP_ALLOWED_TABLES` is non-empty so every allowlisted object can be validated and reflected.
 
 ## Troubleshooting
 

@@ -20,19 +20,20 @@ from supabase_mcp.server import mcp
 
 DISCOVERY_TOOLS = {SEARCH_TOOL_NAME, CALL_TOOL_NAME}
 
-#: Registered but deliberately not discoverable: infrastructure readiness, the
-#: generic schema/row primitives, and the surfaces the orchestrator drives.
+#: Registered but deliberately not discoverable: application/schema helpers
+#: and the surfaces the orchestrator drives.
 APP_ONLY_TOOLS = {
     "a2ui_form",
-    "health_check",
+    "get_user_context",
     "list_allowed_tables",
     "describe_table",
-    "select_rows",
     "present_financial_view",
     "chat_message",
     "a2ui_action",
     "a2ui_error",
 }
+
+REMOVED_TOOLS = {"select_rows", "health_check"}
 
 FINANCIAL_TOOLS = {
     "get_financial_overview",
@@ -122,6 +123,8 @@ async def test_tools_list_is_only_the_discovery_pair() -> None:
     # The catalog is an order of magnitude larger than what the model receives.
     assert len(registered) >= 25
     assert FINANCIAL_TOOLS <= {tool.name for tool in registered}
+    assert REMOVED_TOOLS.isdisjoint(tool.name for tool in registered)
+    assert REMOVED_TOOLS.isdisjoint(listed)
 
 
 @pytest.mark.parametrize(("query", "expected"), DISCOVERY_INTENTS)
@@ -139,6 +142,18 @@ async def test_search_never_returns_infrastructure_or_presentation_tools() -> No
         for query, _ in DISCOVERY_INTENTS:
             names = await _search(client, query)
             assert APP_ONLY_TOOLS.isdisjoint(names), f"{query!r} surfaced {names}"
+
+
+async def test_removed_tools_cannot_be_searched_or_called() -> None:
+    async with Client(mcp) as client:
+        for name in REMOVED_TOOLS:
+            assert name not in await _search(client, name.replace("_", " "))
+            with pytest.raises(ToolError):
+                await client.call_tool(name, {}, raise_on_error=True)
+            with pytest.raises(ToolError):
+                await client.call_tool(
+                    "call_tool", {"name": name, "arguments": {}}, raise_on_error=True
+                )
 
 
 async def test_search_results_carry_callable_schemas() -> None:
@@ -213,11 +228,11 @@ def test_app_only_preserves_existing_ui_metadata() -> None:
 
 
 #: Tools the trusted orchestrator addresses by name rather than discovering.
-#: `select_rows` builds the user context on every turn; `a2ui_action` and
+#: `get_user_context` builds the user context on every turn; `a2ui_action` and
 #: `a2ui_form` carry the confirmed-action flow; `database_overview` backs an
 #: explicit API route.
 ORCHESTRATOR_DRIVEN_TOOLS = {
-    "select_rows",
+    "get_user_context",
     "a2ui_action",
     "a2ui_form",
     "database_overview",

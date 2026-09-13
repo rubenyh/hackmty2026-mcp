@@ -45,14 +45,14 @@ SEARCH_MAX_RESULTS = 5
 #: answers `Unknown tool` however it is addressed - unlike a direct FastMCP
 #: server, which happily delegates to it. Callable therefore means advertised,
 #: and the three tools the trusted orchestrator invokes by name have to stay on
-#: the list: `select_rows` builds the user context every turn, and `a2ui_action`
-#: and `a2ui_form` carry the confirmed-action flow the client drives.
+#: the list: `get_user_context` initializes every turn, and `a2ui_action` and
+#: `a2ui_form` carry the confirmed-action flow the client drives.
 #:
 #: All three remain `app_only`, so tool search and the `call_tool` proxy still
 #: refuse them and a model can neither discover nor invoke them. Pinning widens
 #: what the host can address, not what the model can reach. Everything else -
 #: every financial capability - is found through search.
-ALWAYS_VISIBLE: tuple[str, ...] = ("select_rows", "a2ui_action", "a2ui_form")
+ALWAYS_VISIBLE: tuple[str, ...] = ("get_user_context", "a2ui_action", "a2ui_form")
 
 #: Longest search query fragment that may reach a debug log line.
 _QUERY_LOG_LIMIT = 120

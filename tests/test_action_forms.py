@@ -96,7 +96,7 @@ class FakeDatabase:
         self.calls.append(args)
         return {"status": "success", "id": UID, "amount": args[1].get("amount", 0)}
 
-    async def select_rows(self, request):
+    async def select_scoped_rows(self, request):
         return self.rows.get(request.table, []), request.limit, False
 
 

@@ -125,7 +125,7 @@ async def get_data_chart(
             )
         )
     ]
-    rows, _limit, truncated = await database.select_rows(
+    rows, _limit, truncated = await database.select_scoped_rows(
         SelectRequest(
             schema=request.source.schema_name,
             table=request.source.table,

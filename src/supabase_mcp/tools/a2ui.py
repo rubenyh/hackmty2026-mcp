@@ -54,8 +54,8 @@ from supabase_mcp.services.database_overview import (
     DatabaseOverview,
     get_database_overview,
 )
+from supabase_mcp.tools._context import database_from_context
 from supabase_mcp.tools.action_forms import action_outcome, register_form_actions
-from supabase_mcp.tools.health import _database
 
 logger = logging.getLogger(__name__)
 
@@ -115,7 +115,7 @@ async def database_overview(
     or customer records, and never an answer about personal finances.
     """
     try:
-        return _overview_tool_result(get_database_overview(_database(ctx), limit))
+        return _overview_tool_result(get_database_overview(database_from_context(ctx), limit))
     except Exception as exc:
         logger.warning("Database overview failed (%s)", type(exc).__name__)
         return ToolResult(
@@ -142,7 +142,7 @@ async def visualize_allowed_data(
     and decides no category. Charting step, never a retrieval step.
     """
     try:
-        result = await get_data_chart(_database(ctx), request)
+        result = await get_data_chart(database_from_context(ctx), request)
         return _chart_factory.build(
             fallback_text=chart_fallback(result),
             data_model=chart_data_model(result, request.title),
@@ -310,7 +310,7 @@ async def a2ui_action(
 ) -> ToolResult:
     """Dispatch one allowlisted A2UI user action with trusted ownership."""
     try:
-        database = _database(ctx)
+        database = database_from_context(ctx)
         if name in {"budget.create", "budget.update", "savings_goal.create", "savings_goal.update"}:
             from supabase_mcp.a2ui_actions.proof import verify_action_proof
 
@@ -332,7 +332,7 @@ async def a2ui_action(
             source_component_id=sourceComponentId,
             timestamp=timestamp,
             context=context,
-            database=_database(ctx),
+            database=database_from_context(ctx),
             trusted_scope=trustedScope,
         )
     except ActionDispatchError as exc:

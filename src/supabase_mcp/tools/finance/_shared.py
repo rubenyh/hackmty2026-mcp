@@ -27,7 +27,7 @@ from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 
 from supabase_mcp.errors import PublicErrorCode, SafeMCPError
 from supabase_mcp.serialization import to_json_safe
-from supabase_mcp.tools.health import _database
+from supabase_mcp.tools._context import database_from_context
 
 logger = logging.getLogger(__name__)
 RequestT = TypeVar("RequestT", bound=BaseModel)
@@ -388,7 +388,7 @@ async def _run(
     ctx: Context,
     handler: Callable[[Any, RequestT], Awaitable[dict[str, Any]]],
 ) -> ToolResult:
-    return await _run_with_dependency(tool, request, ctx, _database(ctx), handler)
+    return await _run_with_dependency(tool, request, ctx, database_from_context(ctx), handler)
 
 
 async def _run_with_dependency(

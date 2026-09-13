@@ -441,14 +441,6 @@ class DatabaseClient:
                     "nonnumeric_column", f"Column '{column.name}' is not numeric."
                 )
 
-    async def health_check(self) -> None:
-        """Run a minimal read-only database round trip."""
-        engine = self._require_engine()
-        async with engine.connect() as connection:
-            async with connection.begin():
-                await self._configure_transaction(connection)
-                await connection.execute(text("SELECT 1"))
-
     def build_select(self, request: SelectRequest) -> tuple[Select[Any], int]:
         """Validate a request and build a parameterized SQLAlchemy SELECT."""
         return self._build_select(request, allow_scope_column_filters=False)
@@ -590,7 +582,9 @@ class DatabaseClient:
             return column.ilike(value)
         raise InvalidSelectionError("operator_not_allowed", "The filter operator is not allowed.")
 
-    async def select_rows(self, request: SelectRequest) -> tuple[list[dict[str, Any]], int, bool]:
+    async def select_scoped_rows(
+        self, request: SelectRequest
+    ) -> tuple[list[dict[str, Any]], int, bool]:
         """Execute a validated selection in a bounded read-only transaction."""
         statement, limit = self.build_select(request)
         engine = self._require_engine()
@@ -611,7 +605,7 @@ class DatabaseClient:
         """Execute an internal domain read after its referenced IDs were ownership-checked.
 
         This is deliberately not exposed as an MCP tool. Domain services may add
-        account filters that the generic model-facing selector rejects, while the
+        account filters that the stricter scoped helper rejects, while the
         canonical user-scope predicate remains mandatory in the same SQL statement.
         """
         statement, limit = self._build_select(request, allow_scope_column_filters=True)

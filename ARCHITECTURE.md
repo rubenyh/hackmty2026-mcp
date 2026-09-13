@@ -52,6 +52,7 @@ src/
     server.py         Event-loop setup, FastMCP lifespan, registration, and entry point
     services/
       database_overview.py  Bounded presentation-independent overview use case
+      user_context.py       Fixed application-context reads for the orchestrator
       finance/        Financial rules, coordinated reads, and prediction assembly
     a2ui_support/
       constants.py    v0.9.1, MIME, catalog, action, and stable URI identifiers
@@ -67,11 +68,11 @@ src/
         database_overview.json  Static createSurface/updateComponents messages
         financial_view.json     Stable BankingView/Button composition
     tools/
+      _context.py     Internal lifespan dependency lookup
       a2ui.py         Overview, generic action/error, and resource handlers
       finance/        Thin financial MCP handlers and explicit registration tuple
-      health.py       Sanitized database readiness check
       schema.py       Allowlisted object discovery and description
-      select.py       Structured bounded selection
+      user_context.py Fixed app-only context handler; no caller-selected query
 scripts/
   seed_demo_data.py  Idempotent demo-data seeder (writes via service-role key, bypasses RLS)
 tests/                Offline A2UI unit, packaging, and FastMCP protocol tests
@@ -147,7 +148,7 @@ Unqualified allowlist entries are accepted only when exactly one schema is confi
 
 `supabase_mcp.server` selects `WindowsSelectorEventLoopPolicy` on Windows before importing FastMCP or database modules. This ordering is required by Psycopg's async implementation.
 
-FastMCP's lifespan creates one shared `DatabaseClient` and one shared `InferenceClient`, starts them before serving requests, makes a process-scoped `PredictionService` available through the tool context, and disposes both clients during shutdown. Missing inference configuration does not disable unrelated database tools; a prediction call returns a typed configuration error. The module preserves the four original tools (`health_check`, `list_allowed_tables`, `describe_table`, and `select_rows`) and registers the A2UI and financial domain tools. It publishes the corresponding A2UI presentation templates as read-only resources.
+FastMCP's lifespan creates one shared `DatabaseClient` and one shared `InferenceClient`, starts them before serving requests, makes a process-scoped `PredictionService` available through the tool context, and disposes both clients during shutdown. Missing inference configuration does not disable unrelated database tools; a prediction call returns a typed configuration error. The module registers the fixed app-only user-context handler, schema metadata handlers, A2UI handlers, and financial domain tools. It publishes the corresponding A2UI presentation templates as read-only resources.
 
 `main()` selects stdio unless `MCP_TRANSPORT=http`. HTTP uses the configured host and port; FastMCP exposes its MCP endpoint at `/mcp`. The service itself adds no authentication, authorization middleware, reverse-proxy TLS, rate limiting, or tenant isolation.
 
@@ -167,11 +168,11 @@ Horizon must use the repository directory containing `pyproject.toml` as its pro
 
 `DatabaseClient` owns one SQLAlchemy async engine with a small bounded pool (`pool_size=3`, `max_overflow=2`, five-second pool timeout, and connection pre-ping). On startup it reflects only exact allowlisted tables and views. A non-empty allowlist fails startup if an object is missing, inaccessible, or cannot be reflected. An empty allowlist performs no reflection and exposes no row-selection surface.
 
-Every database operation opens a transaction and executes:
+Every database read opens a transaction and executes:
 
 1. `SET TRANSACTION READ ONLY`.
 2. A transaction-local PostgreSQL `statement_timeout` through `set_config`.
-3. The health or selection statement.
+3. The bounded selection statement.
 
 These application controls complement, rather than replace, database controls. Deployments must use a dedicated login with only `CONNECT`, schema `USAGE`, explicit `SELECT`, and suitable Row Level Security policies. The role must not own protected tables, have `BYPASSRLS`, or use Supabase administrative/service-role credentials.
 
@@ -179,7 +180,7 @@ Startup failures are logged only by bounded operation name and exception class. 
 
 ## Query construction
 
-Clients cannot provide SQL. A `SelectRequest` names a reflected schema/object, a mandatory typed `UserScope`, optional reflected columns, typed filters, typed ordering, an optional limit, and a non-negative offset. Pydantic models forbid unknown fields.
+Clients cannot provide SQL or a general row-selection request. Internal services construct a `SelectRequest` naming a reflected schema/object, a mandatory typed `UserScope`, optional reflected columns, typed filters, typed ordering, an optional limit, and a non-negative offset. Pydantic models forbid unknown fields. The app-only context handler owns a fixed table set and accepts only trusted scope.
 
 `TABLE_USER_SCOPES` is the explicit ownership registry. `users.id`, `accessibility_preferences.user_id`, `accounts.user_id`, `subscriptions.user_id`, and `transfers.user_id` are direct scopes. `transactions.account_id` and `monthly_cash_flow.account_id` are scoped with a parameterized correlated `EXISTS` through `accounts.id` and `accounts.user_id`. The canonical scope predicate is added before all business filters, so SQLAlchemy combines them with `AND`. Unknown/non-demo UUIDs, missing ownership metadata, model-style ownership filters, and allowlisted objects without a registry entry fail with sanitized errors instead of returning rows.
 
@@ -189,24 +190,25 @@ The effective limit is the request limit or `MCP_DEFAULT_LIMIT` and cannot excee
 
 ## Progressive tool discovery
 
-Thirty-one tools are registered, twenty of them financial, and that catalog is
+Thirty tools are registered, twenty of them financial, and that catalog is
 expected to keep growing. Sending every schema on every request wastes context,
 slows the turn, and degrades selection, so `supabase_mcp.discovery` installs
 FastMCP's native `BM25SearchTransform` as the last transform on the server.
-`tools/list` then carries exactly two synthetic tools:
+The model-facing portion of `tools/list` then carries exactly two synthetic
+tools, alongside three pinned app-only handlers used by the trusted host:
 
 ```text
 search_tools(query)         ranked, self-contained definitions from the catalog
 call_tool(name, arguments)  executes one discovered tool
 ```
 
-`ALWAYS_VISIBLE` pins three tools — `select_rows`, `a2ui_action` and
+`ALWAYS_VISIBLE` pins three tools — `get_user_context`, `a2ui_action` and
 `a2ui_form` — and pins them for reachability, not for the model. A hosted
 deployment fronts this server with a proxy that resolves `tools/call` against
 the advertised catalog, so on Horizon an unadvertised tool answers `Unknown
 tool` however it is addressed, while a direct FastMCP server delegates to it
 happily. Callable therefore means advertised, and those three are the ones the
-trusted orchestrator invokes by name: `select_rows` builds the user context on
+trusted orchestrator invokes by name: `get_user_context` builds the fixed user context on
 every turn, and the other two carry the confirmed-action flow. All three stay
 `app_only`, so search and the proxy still refuse them — pinning widens what the
 host can address, never what the model can reach.
@@ -220,8 +222,8 @@ that invariant.
 Discovery is advertisement only. Registration, lifespan, services, database
 filtering, user scoping, A2UI contracts, structured results and error handling
 are unchanged; a hidden tool is still reached by name over the ordinary MCP
-pipeline, which is how the trusted orchestrator reads user context through
-`select_rows` and drives the confirmed-action flow through `a2ui_form`.
+pipeline, which is how the trusted orchestrator reads its fixed user context
+and drives the confirmed-action flow through `a2ui_form`.
 
 Two properties of that pipeline matter for safety. `call_tool` dispatches
 through `ctx.fastmcp.call_tool`, so middleware — including
@@ -231,8 +233,8 @@ the underlying Python function. And both search and the proxy read the catalog
 through `CatalogTransform.get_tool_catalog`, which drops any component declaring
 `_meta.ui.visibility = ["app"]`. `discovery.app_only()` sets that declaration,
 merging it into an existing `ui` block so an A2UI resource link survives, and the
-server applies it to `health_check`, `list_allowed_tables`, `describe_table`,
-`select_rows`, `present_financial_view`, `chat_message`, `a2ui_action`,
+server applies it to `get_user_context`, `list_allowed_tables`, `describe_table`,
+`present_financial_view`, `chat_message`, `a2ui_action`,
 `a2ui_error` and `a2ui_form`. Those nine were never offered to a model, so
 discovery must not become the thing that offers them: a generic row reader — or
 a tool that applies confirmed financial actions — appearing in search results is a wider
@@ -266,10 +268,9 @@ selected. Neither logs arguments, rows, credentials or authorization headers.
 
 ## Tool contracts and errors
 
-- `health_check` returns readiness and database availability without database error details.
+- `get_user_context` returns only the fixed application context needed for one authenticated turn; it accepts no source, column, filter, ordering, pagination, or SQL fields.
 - `list_allowed_tables` returns only successfully reflected allowlisted tables/views and a count.
 - `describe_table` returns cached names, SQL types, nullability, and primary-key flags.
-- `select_rows` returns JSON-safe rows, count, effective pagination values, and truncation state.
 
 Known request failures use stable public codes such as `object_not_allowed`, `column_not_allowed`, `limit_exceeded`, and `invalid_request`. Unexpected failures are reduced to sanitized `server_error`, `database_error`, or `database_unavailable` results. Logs record an operation label and exception class, not credentials or row bodies.
 
@@ -427,8 +428,9 @@ The offline tests use FastMCP's in-memory client and an empty deny-all allowlist
 - **2026-09-12:** Made MCP authoritative for Finance v2 BankingView, added one stable composed financial surface, registered `request_financial_view`, and separated trusted user scope from the five-field client action.
 - **2026-09-12:** Extended the canonical Finance v2 `BankingView` schema with the masked `PaymentCard` object (`cards` on `financial-summary`, `card` on `credit-card` and `card-security`) and the bounded credit-term projection (`creditLimit`, `statementBalance`, `cutoffDate`, `annualInterestRate`, `catPercentage`), and back-ported `totalOwnedBalance`, `totalSpent`, and `insight` so the packaged schema, the Agent's Pydantic mirror, and the client's Zod contract are byte-identical again. `get_accounts` and `get_debt_overview` already read `cards` and `credit_card_terms`, so no table, scope, or allowlist change was required.
 - **2026-09-12:** Added structured financial error taxonomy, redacted traceback logging and correlation IDs, pre-dispatch financial request validation, fixed Literal-based custom-period validation across all affected models, and applied the documented dispute period filter.
-- **2026-09-13:** Pinned `select_rows`, `a2ui_action` and `a2ui_form` in `ALWAYS_VISIBLE` after progressive discovery broke production. FastMCP delegates `tools/call` to unlisted tools, but the hosted deployment proxies the server and resolves calls against the advertised catalog, so every hidden tool answered `Unknown tool` and the orchestrator lost user context on every turn. The three stay app-only, so the model still cannot discover or invoke them; the orchestrator reaches everything else through `call_tool`. The in-memory test client delegates like a direct server, which is why the offline suite passed — the new reachability guard tests the advertised catalog instead.
-- **2026-09-13:** Replaced the model-facing `tools/list` with FastMCP's native `BM25SearchTransform` (`search_tools` + `call_tool`, at most five results, nothing pinned), declared the nine infrastructure, presentation and confirmed-action tools app-only so discovery cannot widen model reach, rewrote the financial descriptions for retrieval and mutual disambiguation, and added stopword filtering to the query rather than to the index. `FINANCIAL_CONTRACT_HASHES` was regenerated for the new discovery text; names, request shapes and structured results are unchanged. The orchestrator now takes its model-facing tools from `tools/list` instead of a local allowlist, enforces trusted user scope through the `call_tool` envelope, and reads `select_rows` results from `structuredContent` because hidden tools publish no output schema. Live testing against `gemini-3.6-flash` showed roughly three model calls in ten filling the proxy's two-level envelope incorrectly, so the orchestrator normalizes the shapes that have a single valid reading; end-to-end success went from four of eight to ten of ten.
+- **2026-09-13:** Pinned the three app-driven handlers in `ALWAYS_VISIBLE` after progressive discovery broke direct host calls in production. FastMCP delegates `tools/call` to unlisted tools, but the hosted deployment proxy resolves calls against the advertised catalog. The handlers stay app-only, so the model cannot discover or invoke them; the reachability guard tests the advertised catalog.
+- **2026-09-13:** Replaced the model-facing `tools/list` with FastMCP's native `BM25SearchTransform` (`search_tools` + `call_tool`, at most five results), declared infrastructure, presentation and confirmed-action tools app-only, rewrote the financial descriptions for retrieval, and added query stopword filtering. The orchestrator takes its model-facing tools from `tools/list`, enforces trusted user scope through the proxy envelope, and normalizes unambiguous malformed proxy calls.
+- **2026-09-13:** Removed the former generic row and database-readiness tools from registration and source. A fixed app-only `get_user_context` handler now supplies the orchestrator's existing turn context without accepting caller-selected database objects or query clauses. Internal scoped-selection helpers remain available to domain services, charts, and confirmed-action forms and are not MCP tools.
 
 ## Documentation maintenance
 

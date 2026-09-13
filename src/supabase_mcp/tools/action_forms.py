@@ -19,7 +19,7 @@ from supabase_mcp.a2ui_support.surfaces import ACTION_SURFACES, SURFACE_REGISTRY
 from supabase_mcp.database import DatabaseClient
 from supabase_mcp.errors import InvalidSelectionError
 from supabase_mcp.models import SelectRequest, UserScope
-from supabase_mcp.tools.health import _database
+from supabase_mcp.tools._context import database_from_context
 
 
 async def _owned_rows(
@@ -28,7 +28,7 @@ async def _owned_rows(
     table: str,
     columns: list[str],
 ) -> list[dict[str, Any]]:
-    rows, _, _ = await database.select_rows(
+    rows, _, _ = await database.select_scoped_rows(
         SelectRequest(
             schema="public",
             table=table,
@@ -118,22 +118,24 @@ async def _prepare_transfer(
         )
         if target:
             form["recipient"] = [str(target["display_name"])]
-    source_options = _unique_choice_options([
-        {
-            "label": (
-                f"{_account_label(row)} · ${float(row['available_balance']):,.2f} MXN"
-            ),
-            "value": str(row["display_name"]),
-        }
-        for row in sources
-    ])
-    recipient_options = _unique_choice_options([
-        {
-            "label": f"{row['display_name']} · {row['bank_name']} · •••• {row['last_four']}",
-            "value": str(row["display_name"]),
-        }
-        for row in beneficiaries
-    ])
+    source_options = _unique_choice_options(
+        [
+            {
+                "label": (f"{_account_label(row)} · ${float(row['available_balance']):,.2f} MXN"),
+                "value": str(row["display_name"]),
+            }
+            for row in sources
+        ]
+    )
+    recipient_options = _unique_choice_options(
+        [
+            {
+                "label": f"{row['display_name']} · {row['bank_name']} · •••• {row['last_four']}",
+                "value": str(row["display_name"]),
+            }
+            for row in beneficiaries
+        ]
+    )
     beneficiary_names = {option["value"] for option in recipient_options}
     recipient_options.extend(
         {
@@ -332,7 +334,7 @@ async def prepare_form(
         help_text, extra_data = await _prepare_credit_card_payment(database, scope, form)
     if name.endswith(".load"):
         table = "budgets" if name.startswith("budget.") else "savings_goals"
-        rows, _, truncated = await database.select_rows(
+        rows, _, truncated = await database.select_scoped_rows(
             SelectRequest(
                 schema="public",
                 table=table,
@@ -428,7 +430,7 @@ async def a2ui_form(
             values["amount"] = initial_amount
         if initial_recipient is not None:
             values["recipient"] = [initial_recipient.strip()]
-        return await prepare_form(name, _database(ctx), trustedScope, values)
+        return await prepare_form(name, database_from_context(ctx), trustedScope, values)
     except Exception:
         return action_outcome(
             False, "No se pudo cargar el formulario. Inténtalo de nuevo.", "form_unavailable"
@@ -450,7 +452,7 @@ async def handle_form_action(
             target = call.name.replace(".load", ".update")
             from supabase_mcp.models import FilterCondition, FilterOperator
 
-            rows, _, _ = await database.select_rows(
+            rows, _, _ = await database.select_scoped_rows(
                 SelectRequest(
                     schema="public",
                     table=table,
