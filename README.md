@@ -149,7 +149,13 @@ call_tool(name, arguments)   executes a discovered tool
 Every tool below stays registered and stays individually specialized; only its
 advertisement changed. A client discovers a capability with `search_tools`,
 which returns complete, self-contained tool definitions ranked by relevance,
-then executes it with `call_tool`. Nothing is pinned into `tools/list`.
+then executes it with `call_tool`.
+
+`tools/list` also carries `select_rows`, `a2ui_action` and `a2ui_form`. They are
+pinned so a *host* can address them by name — a hosted deployment proxies this
+server and resolves `tools/call` against the advertised catalog, so an
+unadvertised tool is not callable at all. All three are still declared app-only,
+so tool search and `call_tool` refuse them and no model can reach them.
 
 Search returns at most five tools. Infrastructure, presentation and
 confirmed-action tools (`health_check`, `list_allowed_tables`, `describe_table`,

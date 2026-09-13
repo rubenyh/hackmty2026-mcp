@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 from fastmcp import Client
+from fastmcp.apps.config import is_model_visible
 from fastmcp.exceptions import ToolError
 
 from supabase_mcp.discovery import (
@@ -22,6 +23,7 @@ DISCOVERY_TOOLS = {SEARCH_TOOL_NAME, CALL_TOOL_NAME}
 #: Registered but deliberately not discoverable: infrastructure readiness, the
 #: generic schema/row primitives, and the surfaces the orchestrator drives.
 APP_ONLY_TOOLS = {
+    "a2ui_form",
     "health_check",
     "list_allowed_tables",
     "describe_table",
@@ -99,8 +101,10 @@ async def test_tools_list_is_only_the_discovery_pair() -> None:
     async with Client(mcp) as client:
         listed = {tool.name for tool in await client.list_tools()}
 
-    assert listed == DISCOVERY_TOOLS
-    assert ALWAYS_VISIBLE == ()
+    # The pinned tools are addressable by the host; the model-facing surface is
+    # still just the discovery pair.
+    assert listed == DISCOVERY_TOOLS | set(ALWAYS_VISIBLE)
+    assert APP_ONLY_TOOLS.issuperset(ALWAYS_VISIBLE)
     # The catalog is an order of magnitude larger than what the model receives.
     assert len(registered) >= 25
     assert FINANCIAL_TOOLS <= {tool.name for tool in registered}
@@ -192,3 +196,52 @@ def test_app_only_preserves_existing_ui_metadata() -> None:
     assert merged["ui"]["resourceUri"] == "a2ui://chat/message"
     assert merged["ui"]["mimeType"] == "x"
     assert merged["ui"]["visibility"] == ["app"]
+
+
+#: Tools the trusted orchestrator addresses by name rather than discovering.
+#: `select_rows` builds the user context on every turn; `a2ui_action` and
+#: `a2ui_form` carry the confirmed-action flow; `database_overview` backs an
+#: explicit API route.
+ORCHESTRATOR_DRIVEN_TOOLS = {
+    "select_rows",
+    "a2ui_action",
+    "a2ui_form",
+    "database_overview",
+}
+
+
+async def test_every_orchestrator_driven_tool_is_still_reachable() -> None:
+    """A tool that is neither advertised nor model-visible cannot be called.
+
+    A hosted deployment fronts this server with a proxy that resolves
+    `tools/call` against the advertised catalog, so an unadvertised tool answers
+    `Unknown tool` by name and must go through `call_tool` — which in turn
+    refuses anything declared app-only. App-only plus unpinned is therefore
+    unreachable, and that combination silently broke user context in
+    production. Each of these tools must keep exactly one open door.
+    """
+    registered = {tool.name: tool for tool in await mcp._list_tools()}
+    async with Client(mcp) as client:
+        advertised = {tool.name for tool in await client.list_tools()}
+
+    for name in ORCHESTRATOR_DRIVEN_TOOLS:
+        assert name in registered, f"{name} is not registered at all"
+        pinned = name in advertised
+        discoverable = is_model_visible(registered[name])
+        assert pinned or discoverable, (
+            f"{name} is app-only and unpinned: unreachable by name and refused by the proxy"
+        )
+
+
+async def test_pinning_widens_addressing_without_widening_the_model() -> None:
+    """The pinned tools are on the list for the host, never for the model."""
+    registered = {tool.name: tool for tool in await mcp._list_tools()}
+    async with Client(mcp) as client:
+        advertised = {tool.name for tool in await client.list_tools()}
+        for name in ALWAYS_VISIBLE:
+            assert name in advertised
+            assert not is_model_visible(registered[name])
+            # Search must not offer it, and the proxy must not execute it.
+            assert name not in await _search(client, name.replace("_", " "))
+            with pytest.raises(ToolError):
+                await client.call_tool("call_tool", {"name": name, "arguments": {}})

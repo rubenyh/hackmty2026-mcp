@@ -150,7 +150,10 @@ async def test_all_fifteen_tools_are_registered_with_bilingual_discovery_text(
     listed_tools = [tool.to_mcp_tool() for tool in await mcp._list_tools()]
     listed = {tool.name: tool for tool in listed_tools}
     async with Client(mcp) as client:
-        assert {tool.name for tool in await client.list_tools()} == {"search_tools", "call_tool"}
+        advertised = {tool.name for tool in await client.list_tools()}
+    # Discovery pair plus the tools pinned purely so the host can address them.
+    assert {"search_tools", "call_tool"} <= advertised
+    assert FINANCIAL_NAMES.isdisjoint(advertised)
     assert {tool.__name__ for tool in FINANCIAL_TOOLS} == FINANCIAL_NAMES
     assert FINANCIAL_NAMES <= listed.keys()
     assert len(FINANCIAL_TOOLS) == len(FINANCIAL_NAMES)

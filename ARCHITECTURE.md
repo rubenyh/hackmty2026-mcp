@@ -190,11 +190,22 @@ search_tools(query)         ranked, self-contained definitions from the catalog
 call_tool(name, arguments)  executes one discovered tool
 ```
 
-`ALWAYS_VISIBLE` is empty. No tool is pinned: readiness checks are not part of a
-banking conversation, and every A2UI surface here is driven by the orchestrator
-rather than chosen by a model, so none of them needs to occupy context on every
-request. Adding a name to `ALWAYS_VISIBLE` requires a written architectural
-reason.
+`ALWAYS_VISIBLE` pins three tools — `select_rows`, `a2ui_action` and
+`a2ui_form` — and pins them for reachability, not for the model. A hosted
+deployment fronts this server with a proxy that resolves `tools/call` against
+the advertised catalog, so on Horizon an unadvertised tool answers `Unknown
+tool` however it is addressed, while a direct FastMCP server delegates to it
+happily. Callable therefore means advertised, and those three are the ones the
+trusted orchestrator invokes by name: `select_rows` builds the user context on
+every turn, and the other two carry the confirmed-action flow. All three stay
+`app_only`, so search and the proxy still refuse them — pinning widens what the
+host can address, never what the model can reach.
+
+Nothing else is pinned, and a fourth name needs a written architectural reason.
+The combination to avoid is app-only *and* unpinned: such a tool is unreachable
+by name and refused by the proxy, which is exactly how user context broke in
+production once. `test_every_orchestrator_driven_tool_is_still_reachable` guards
+that invariant.
 
 Discovery is advertisement only. Registration, lifespan, services, database
 filtering, user scoping, A2UI contracts, structured results and error handling
@@ -371,6 +382,7 @@ The offline tests use FastMCP's in-memory client and an empty deny-all allowlist
 - **2026-09-12:** Made MCP authoritative for Finance v2 BankingView, added one stable composed financial surface, registered `request_financial_view`, and separated trusted user scope from the five-field client action.
 - **2026-09-12:** Extended the canonical Finance v2 `BankingView` schema with the masked `PaymentCard` object (`cards` on `financial-summary`, `card` on `credit-card` and `card-security`) and the bounded credit-term projection (`creditLimit`, `statementBalance`, `cutoffDate`, `annualInterestRate`, `catPercentage`), and back-ported `totalOwnedBalance`, `totalSpent`, and `insight` so the packaged schema, the Agent's Pydantic mirror, and the client's Zod contract are byte-identical again. `get_accounts` and `get_debt_overview` already read `cards` and `credit_card_terms`, so no table, scope, or allowlist change was required.
 - **2026-09-12:** Added structured financial error taxonomy, redacted traceback logging and correlation IDs, pre-dispatch financial request validation, fixed Literal-based custom-period validation across all affected models, and applied the documented dispute period filter.
+- **2026-09-13:** Pinned `select_rows`, `a2ui_action` and `a2ui_form` in `ALWAYS_VISIBLE` after progressive discovery broke production. FastMCP delegates `tools/call` to unlisted tools, but the hosted deployment proxies the server and resolves calls against the advertised catalog, so every hidden tool answered `Unknown tool` and the orchestrator lost user context on every turn. The three stay app-only, so the model still cannot discover or invoke them; the orchestrator reaches everything else through `call_tool`. The in-memory test client delegates like a direct server, which is why the offline suite passed — the new reachability guard tests the advertised catalog instead.
 - **2026-09-13:** Replaced the model-facing `tools/list` with FastMCP's native `BM25SearchTransform` (`search_tools` + `call_tool`, at most five results, nothing pinned), declared the nine infrastructure, presentation and confirmed-action tools app-only so discovery cannot widen model reach, rewrote the financial descriptions for retrieval and mutual disambiguation, and added stopword filtering to the query rather than to the index. `FINANCIAL_CONTRACT_HASHES` was regenerated for the new discovery text; names, request shapes and structured results are unchanged. The orchestrator now takes its model-facing tools from `tools/list` instead of a local allowlist, enforces trusted user scope through the `call_tool` envelope, and reads `select_rows` results from `structuredContent` because hidden tools publish no output schema. Live testing against `gemini-3.6-flash` showed roughly three model calls in ten filling the proxy's two-level envelope incorrectly, so the orchestrator normalizes the shapes that have a single valid reading; end-to-end success went from four of eight to ten of ten.
 
 ## Documentation maintenance
