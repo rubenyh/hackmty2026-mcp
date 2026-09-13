@@ -178,6 +178,12 @@ MCP is the authoritative source of `https://fluidbank.app/a2ui/catalogs/finance/
 
 `present_financial_view` is an optional generic validation/resource factory for MCP callers. Its request contains a BankingView value, bounded action label, and bounded target intent; it does not retrieve data or decide which financial semantics to use. The Agent may construct the same messages locally after interpreting MCP results, but must use this exact MCP-owned contract. The registered `financial-view` template is a complete flat graph with stable IDs: `root` (`Column`), `banking_view`, `request_financial_view_label`, and `request_financial_view_button`. Local template validation additionally rejects references to components outside the surface. One dynamic `updateDataModel` supplies the view and action values.
 
+The payment-card contract is part of Finance v2, not a separate component. A `PaymentCard` object - `cardId`, `cardName`, `cardType`, `network`, `lastFour`, `status`, and optional `expires` (`YYYY-MM`) and `accountId` - appears as `cards` on `financial-summary`, and as `card` on `credit-card` and `card-security`. It is the masked projection of `public.cards`: the schema has no property for a full card number, CVV, expiry day, or cardholder document, and `additionalProperties: false` rejects any attempt to add one. `financial-summary` therefore answers a balance question with the account totals *and* the plastic behind them, without a second catalog component or a second retrieval contract.
+
+`credit-card` additionally accepts the bounded `credit_card_terms` projection: `creditLimit`, `statementBalance`, `cutoffDate`, `annualInterestRate`, and `catPercentage`. Rates are percentage points bounded to 0-1000, matching the database check constraint rather than a fraction. Every one of these properties is optional, so a deployment without `credit_card_terms` rows keeps sending the view it sends today.
+
+`financial-summary` requires `totalOwnedBalance` and `spending-analysis` requires `totalSpent`. Both totals are computed by the producer, never by the renderer, so a truncated list of accounts or categories can never silently change the headline number.
+
 `visualize_allowed_data` remains unchanged and presentation-independent in `structuredContent`. The Agent may call it more than once and combine returned `chart` objects into one BankingView payload, such as `spending-analysis`; no MCP retrieval call selects a BankingView intent, and no last-result-wins behavior is introduced in the data service.
 
 ## A2UI actions and errors
@@ -235,6 +241,7 @@ The offline tests use FastMCP's in-memory client and an empty deny-all allowlist
 - **2026-09-12:** Made the file-based Horizon entrypoint import-safe by removing the internal/external `a2ui` package-name collision (renamed to `a2ui_support`), constrained sdist contents, and added package-import and `fastmcp inspect` regressions that run without runtime secrets.
 - **2026-09-12:** Added explicit protocol assertions that both A2UI resources are UTF-8 textual JSON validated by the registered v0.9.1 catalogs, checked every exposed input schema for JSON serialization, and removed startup stack-trace logging.
 - **2026-09-12:** Made MCP authoritative for Finance v2 BankingView, added one stable composed financial surface, registered `request_financial_view`, and separated trusted user scope from the five-field client action.
+- **2026-09-12:** Extended the canonical Finance v2 `BankingView` schema with the masked `PaymentCard` object (`cards` on `financial-summary`, `card` on `credit-card` and `card-security`) and the bounded credit-term projection (`creditLimit`, `statementBalance`, `cutoffDate`, `annualInterestRate`, `catPercentage`), and back-ported `totalOwnedBalance`, `totalSpent`, and `insight` so the packaged schema, the Agent's Pydantic mirror, and the client's Zod contract are byte-identical again. `get_accounts` and `get_debt_overview` already read `cards` and `credit_card_terms`, so no table, scope, or allowlist change was required.
 
 ## Documentation maintenance
 

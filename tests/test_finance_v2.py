@@ -42,8 +42,115 @@ def _empty_view() -> dict[str, object]:
     }
 
 
+def _payment_card() -> dict[str, object]:
+    return {
+        "cardId": "card-1",
+        "cardName": "Tarjeta Oro",
+        "cardType": "credit",
+        "network": "mastercard",
+        "lastFour": "9012",
+        "status": "active",
+        "expires": "2028-11",
+        "accountId": "account-credit",
+    }
+
+
+def _summary_view() -> dict[str, object]:
+    return {
+        "title": "Tu panorama financiero",
+        "intent": "financial-summary",
+        "currency": "MXN",
+        "totalOwnedBalance": 20500,
+        "accounts": [
+            {
+                "accountId": "account-credit",
+                "accountName": "Tarjeta de credito",
+                "accountType": "credit",
+                "availableBalance": 1500,
+            }
+        ],
+        "cards": [_payment_card()],
+    }
+
+
+def _credit_card_view() -> dict[str, object]:
+    card = dict(_payment_card())
+    card.pop("accountId")
+    return {
+        "title": "Organiza el pago de tu tarjeta",
+        "intent": "credit-card",
+        "currency": "MXN",
+        "cardName": "Tarjeta Oro",
+        "lastFour": "9012",
+        "card": card,
+        "debt": 8500,
+        "creditLimit": 10000,
+        "statementBalance": 6200,
+        "availableCredit": 1500,
+        "minimumPayment": 420,
+        "interestFreePayment": 6200,
+        "cutoffDate": "2026-09-10",
+        "dueDate": "2026-09-25",
+        "annualInterestRate": 36.9,
+        "catPercentage": 48.2,
+    }
+
+
 def test_valid_finance_v2_banking_view_passes() -> None:
     A2UIValidator().validate_banking_view(_empty_view())
+
+
+@pytest.mark.parametrize("view", [_summary_view(), _credit_card_view()])
+def test_payment_card_and_credit_terms_validate(view: dict[str, object]) -> None:
+    """A balance question carries card faces; a card question carries its terms."""
+    A2UIValidator().validate_banking_view(view)
+
+
+@pytest.mark.parametrize(
+    "card_override",
+    [
+        {"lastFour": "12"},
+        {"lastFour": "4111111111111111"},
+        {"network": "discover"},
+        {"cardType": "prepaid"},
+        {"expires": "2028-13"},
+        {"expires": "2028-11-04"},
+        {"pan": "4111111111111111"},
+        {"cvv": "123"},
+    ],
+)
+def test_payment_card_rejects_malformed_and_sensitive_fields(
+    card_override: dict[str, object],
+) -> None:
+    view = _summary_view()
+    with pytest.raises(A2UIValidationError):
+        A2UIValidator().validate_banking_view(
+            {**view, "cards": [{**_payment_card(), **card_override}]}
+        )
+
+
+@pytest.mark.parametrize("removed", ["totalOwnedBalance", "accounts"])
+def test_financial_summary_requires_the_backend_computed_total(removed: str) -> None:
+    view = _summary_view()
+    view.pop(removed)
+    with pytest.raises(A2UIValidationError):
+        A2UIValidator().validate_banking_view(view)
+
+
+@pytest.mark.parametrize(
+    "override",
+    [
+        {"annualInterestRate": -1},
+        {"annualInterestRate": 1001},
+        {"catPercentage": "48.2%"},
+        {"creditLimit": 0},
+        {"statementBalance": -100},
+        {"card": {**_payment_card(), "brandColor": "#ff0000"}},
+    ],
+)
+def test_credit_card_terms_stay_bounded(override: dict[str, object]) -> None:
+    with pytest.raises(A2UIValidationError):
+        A2UIValidator().validate_banking_view({**_credit_card_view(), **override})
 
 
 def test_canonical_schema_contains_exact_intent_parity_set() -> None:
