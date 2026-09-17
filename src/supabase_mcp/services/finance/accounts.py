@@ -20,6 +20,20 @@ from supabase_mcp.services.finance._shared import (
 )
 
 
+def _masked_clabe(value: object) -> str | None:
+    """Fourteen mask characters plus the last four digits, or nothing.
+
+    Matches the client contract's `^[•*]{14}\d{4}$`. A CLABE that is not the
+    standard 18 digits is not masked into a wrong shape — it is dropped.
+    """
+    if not isinstance(value, str):
+        return None
+    digits = "".join(character for character in value if character.isdigit())
+    if len(digits) != 18:
+        return None
+    return "•" * 14 + digits[-4:]
+
+
 async def get_accounts_data(database: DatabaseClient, request: AccountsRequest) -> dict[str, Any]:
     accounts = await _owned_accounts(database, request.scope, request.account_ids)
     if request.account_type:
@@ -28,7 +42,7 @@ async def get_accounts_data(database: DatabaseClient, request: AccountsRequest) 
         database,
         request.scope,
         "account_details",
-        ["account_id", "display_name", "bank_name", "last_four"],
+        ["account_id", "display_name", "bank_name", "last_four", "clabe"],
     )
     details_by_account = {str(row["account_id"]): row for row in details}
     cards: list[dict[str, Any]] = []
@@ -102,6 +116,9 @@ async def get_accounts_data(database: DatabaseClient, request: AccountsRequest) 
                 or str(account.get("account_type", "account")).replace("_", " ").title(),
                 "bank_name": detail.get("bank_name"),
                 "masked_last_four": f"•••• {last_four}" if last_four else None,
+                # Masked here, on the server. The full CLABE is selected only to
+                # derive this and never leaves the process.
+                "masked_clabe": _masked_clabe(detail.get("clabe")),
                 "cards": [card for card in cards if str(card.get("account_id")) == account_id],
                 "credit_terms": terms_by_account.get(account_id),
             }

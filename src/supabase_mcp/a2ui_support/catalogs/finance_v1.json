@@ -97,7 +97,8 @@
               "oneOf": [
                 {"$ref": "#/$defs/DataBinding"},
                 {"$ref": "#/$defs/AreaChart"},
-                {"$ref": "#/$defs/HeatmapChart"}
+                {"$ref": "#/$defs/HeatmapChart"},
+                {"$ref": "#/$defs/RingChart"}
               ]
             }
           },
@@ -232,12 +233,37 @@
       "required": ["kind", "props"],
       "additionalProperties": false
     },
+    "RingProps": {
+      "type": "object",
+      "properties": {
+        "value": {"type": "number", "minimum": 0, "maximum": 1000000000000},
+        "max": {"type": "number", "exclusiveMinimum": 0, "maximum": 1000000000000},
+        "label": {"type": "string", "minLength": 1, "maxLength": 80},
+        "currency": {"type": "string", "enum": ["MXN", "USD"]},
+        "intent": {"type": "string", "enum": ["spend", "goal"]},
+        "warnAt": {"type": "number", "minimum": 0, "maximum": 1},
+        "size": {"type": "string", "enum": ["sm", "md", "lg"]},
+        "caption": {"type": "string", "maxLength": 60}
+      },
+      "required": ["value", "max", "label"],
+      "additionalProperties": false
+    },
     "HeatmapChart": {
       "type": "object",
       "properties": {
         "kind": {"const": "heatmap"},
         "accessibleSummary": {"type": "string", "maxLength": 500},
         "props": {"$ref": "#/$defs/HeatmapProps"}
+      },
+      "required": ["kind", "props"],
+      "additionalProperties": false
+    },
+    "RingChart": {
+      "type": "object",
+      "properties": {
+        "kind": {"const": "ring"},
+        "accessibleSummary": {"type": "string", "maxLength": 500},
+        "props": {"$ref": "#/$defs/RingProps"}
       },
       "required": ["kind", "props"],
       "additionalProperties": false

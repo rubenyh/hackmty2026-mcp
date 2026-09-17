@@ -273,6 +273,30 @@
                 ],
                 "additionalProperties": false
               }
+            },
+            "highlight": {
+              "type": "object",
+              "properties": {
+                "transactionId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "focus": {
+                  "type": "string",
+                  "enum": [
+                    "largest",
+                    "smallest",
+                    "latest",
+                    "recurring"
+                  ]
+                }
+              },
+              "required": [
+                "transactionId",
+                "focus"
+              ],
+              "additionalProperties": false
             }
           },
           "required": [

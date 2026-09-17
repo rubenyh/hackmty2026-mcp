@@ -37,7 +37,7 @@ from supabase_mcp.finance_models import (
 )
 from supabase_mcp.models import SelectRequest
 from supabase_mcp.server import mcp
-from supabase_mcp.services.finance.accounts import get_credit_cards_data
+from supabase_mcp.services.finance.accounts import get_accounts_data, get_credit_cards_data
 from supabase_mcp.services.finance.expenses import get_transaction_disputes_data
 from supabase_mcp.tools.finance import (
     FINANCIAL_REQUEST_MODELS,
@@ -123,6 +123,7 @@ class CreditCardDatabase(EmptyDomainDatabase):
                     "display_name": "Crédito Oro",
                     "bank_name": "Banorte",
                     "last_four": "9999",
+                    "clabe": "072180001234567890",
                 }
             ],
             "cards": [
@@ -205,6 +206,19 @@ async def test_credit_card_tool_returns_only_a_masked_card_projection() -> None:
     assert card["available_credit"] == 2500
     assert card["credit_terms"]["minimum_payment"] == 400
     assert "last_four" not in card
+
+
+@pytest.mark.asyncio
+async def test_accounts_tool_exposes_only_a_server_masked_clabe() -> None:
+    result = await get_accounts_data(
+        CreditCardDatabase(), AccountsRequest(scope={"user_id": USER_A})
+    )
+
+    account = result["accounts"][0]
+    assert account["masked_clabe"] == "••••••••••••••7890"
+    # The raw value never leaves the service, under any key.
+    assert "clabe" not in account
+    assert "072180001234567890" not in str(result)
 
 
 def _case_id(value: object) -> str:

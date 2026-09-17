@@ -316,7 +316,30 @@ class HeatmapChartData(StrictModel):
     props: HeatmapChartProps
 
 
-ChartData = Annotated[AreaChartData | HeatmapChartData, Field(discriminator="kind")]
+class RingChartProps(StrictModel):
+    """One ratio against a limit, mirrored from the mobile `progressRingPropsSchema`.
+
+    `intent`, `warn_at` and `size` stay optional on the wire: their defaults are
+    the client's, so this side never has to know or repeat them.
+    """
+
+    value: float = Field(ge=0, le=1e12, allow_inf_nan=False)
+    limit: float = Field(alias="max", gt=0, le=1e12, allow_inf_nan=False)
+    label: str = Field(min_length=1, max_length=80)
+    currency: Literal["MXN", "USD"] | None = None
+    intent: Literal["spend", "goal"] | None = None
+    warn_at: float | None = Field(default=None, alias="warnAt", ge=0, le=1, allow_inf_nan=False)
+    size: Literal["sm", "md", "lg"] | None = None
+    caption: str | None = Field(default=None, max_length=60)
+
+
+class RingChartData(StrictModel):
+    kind: Literal["ring"]
+    accessible_summary: str = Field(alias="accessibleSummary", min_length=1, max_length=500)
+    props: RingChartProps
+
+
+ChartData = Annotated[AreaChartData | HeatmapChartData | RingChartData, Field(discriminator="kind")]
 
 
 class VisualizeAllowedDataResult(StrictModel):
